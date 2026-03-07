@@ -1,0 +1,19 @@
+# Production Profile
+# 프로덕션 환경 설정
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate  # 프로덕션: 스키마 검증만 수행
+    show-sql: false
+
+  sql:
+    init:
+      mode: never  # 프로덕션에서는 초기 데이터 로드하지 않음
+
+logging:
+  level:
+    root: WARN
+    com.lms: INFO
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN

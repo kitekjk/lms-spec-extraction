@@ -1,0 +1,19 @@
+# Development Profile
+# 개발 서버 환경 설정
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: update  # 개발 서버: 스키마 변경사항 자동 반영
+    show-sql: true
+
+  sql:
+    init:
+      mode: never  # 개발 서버에서는 초기 데이터 자동 로드하지 않음
+
+logging:
+  level:
+    root: INFO
+    com.lms: DEBUG
+    org.springframework.security: INFO
+    org.hibernate.SQL: DEBUG
