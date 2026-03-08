@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """
-Spec 린터: Backend + Frontend Spec 문서의 구조와 완결성을 검증한다.
+Spec 린터: Backend + Frontend Spec 문서 검증.
 
 사용법:
-  python spec_lint.py docs/specs/                # 전체
-  python spec_lint.py docs/specs/attendance/     # 특정 도메인
-  python spec_lint.py docs/specs/screens/        # Frontend 화면만
-  python spec_lint.py docs/specs/e2e/            # Frontend E2E만
+  python spec_lint.py docs/specs/
+  python spec_lint.py docs/specs/screens/
+  python spec_lint.py docs/specs/e2e/
 """
 
 import sys, re, os
@@ -24,7 +23,7 @@ REQUIRED_SECTIONS = {
     "init_data": ["기본 사용자"],
     "frontend_definition": ["기본 정보", "Backend API 연동", "화면 목록"],
     "frontend_architecture": ["디렉토리 규칙", "API 연동 규칙"],
-    "screen_spec": ["기본 정보", "관련 Backend Spec", "화면 목적", "사용자 흐름", "API 호출"],
+    "screen_spec": ["기본 정보", "관련 Backend Spec", "화면 목적", "화면 구성 요소", "사용자 흐름"],
     "e2e_test_spec": ["기본 정보", "관련 Backend Spec", "테스트 시나리오"],
 }
 
@@ -33,6 +32,7 @@ VAGUE_TERMS = ["적절한", "충분한", "필요한", "적당한", "알맞은",
 
 TC_ID_PATTERN = re.compile(r"TC-[A-Z]+-\d+-\d+")
 TC_FE_PATTERN = re.compile(r"TC-FE-\d+-\d+")
+API_PATTERN = re.compile(r"(GET|POST|PUT|PATCH|DELETE)\s+/api/")
 TEST_LEVELS = {"Unit", "Integration", "E2E"}
 
 
@@ -53,7 +53,7 @@ def parse_spec(filepath):
     for line in lines:
         if line.startswith("# ") and result["title"] is None:
             result["title"] = line[2:].strip()
-            m = re.match(r"^([A-Z]+-[A-Z]*-?\d+)", result["title"])
+            m = re.match(r"^((?:[A-Z]+-)+\d+)", result["title"])
             if m: result["spec_id"] = m.group(1)
         elif line.startswith("## "):
             if current_h2: result["sections"][current_h2] = "\n".join(current_content)
@@ -85,9 +85,8 @@ def lint_spec(filepath):
             if not any(sec in s for s in spec["sections"]):
                 errors.append(LintError(fname, 0, "ERROR", f"필수 섹션 누락: ## {sec}"))
 
-    # use_case 전용
+    # ── use_case ──
     if spec["type"] == "use_case":
-        # 관련 모델
         if not any("모델" in s for s in spec["sections"]):
             errors.append(LintError(fname, 0, "ERROR", "## 관련 모델 누락"))
         else:
@@ -95,7 +94,6 @@ def lint_spec(filepath):
             if "주 모델" not in mc:
                 errors.append(LintError(fname, 0, "WARNING", "'주 모델' 구분 없음"))
 
-        # NFR
         if not any("비기능" in s for s in spec["sections"]):
             errors.append(LintError(fname, 0, "ERROR", "## 비기능 요구사항 누락"))
         else:
@@ -103,7 +101,6 @@ def lint_spec(filepath):
             if "POLICY-NFR" not in nc and "공통" not in nc:
                 errors.append(LintError(fname, 0, "WARNING", "NFR에 POLICY-NFR-001 참조 없음"))
 
-        # 테스트 시나리오
         if "테스트 시나리오" in spec["sections"]:
             tc = spec["sections"]["테스트 시나리오"]
             ids = TC_ID_PATTERN.findall(tc)
@@ -115,40 +112,118 @@ def lint_spec(filepath):
                 if not any(f"({lv})" in h3 for lv in TEST_LEVELS):
                     errors.append(LintError(fname, 0, "WARNING", f"레벨 없음: {h3[:50]}"))
 
-        # 함수명 경고
         for sec in ("기본 흐름", "대안 흐름"):
             if sec in spec["sections"] and re.search(r"fun\s+\w+", spec["sections"][sec]):
                 errors.append(LintError(fname, 0, "WARNING", f"## {sec}에 함수명 포함"))
 
-    # screen_spec: Backend 참조 확인
+    # ── screen_spec: 구성 요소별 Backend API 매핑 검증 ──
     if spec["type"] == "screen_spec":
+        # Backend Spec 참조
         if "관련 Backend Spec" in spec["sections"]:
-            ids = re.findall(r"LMS-[A-Z]+-\d+", spec["sections"]["관련 Backend Spec"])
+            ids = re.findall(r"LMS-(?:[A-Z]+-)+\d+", spec["sections"]["관련 Backend Spec"])
             if not ids:
                 errors.append(LintError(fname, 0, "ERROR", "화면 Spec에 Backend Spec 참조 없음"))
-        if "API 호출" in spec["sections"]:
-            apis = spec["sections"]["API 호출"].strip()
-            if not apis:
-                errors.append(LintError(fname, 0, "WARNING", "## API 호출이 비어 있음"))
 
-    # e2e_test_spec: TC-FE ID 확인
+        # 화면 구성 요소 검증
+        if "화면 구성 요소" in spec["sections"]:
+            comp_content = spec["sections"]["화면 구성 요소"]
+            # h3 수집 (구성 요소 제목들)
+            components = [k for k, v in spec["h3_sections"].items() if v == "화면 구성 요소"]
+
+            if not components:
+                errors.append(LintError(fname, 0, "WARNING", "## 화면 구성 요소에 ### 항목이 없습니다"))
+            else:
+                for comp in components:
+                    # 해당 컴포넌트 내용 찾기 (h3 이후 ~ 다음 h3 전까지)
+                    # 간단히 전체 content에서 검사
+                    pass
+
+                # Backend API 매핑 확인
+                has_api = bool(API_PATTERN.search(comp_content)) or "Backend API" in comp_content
+                if not has_api:
+                    errors.append(LintError(fname, 0, "ERROR",
+                        "화면 구성 요소에 Backend API 매핑이 없습니다. 각 요소에 'Backend API: GET/POST ...' 필요"))
+
+                # 빈 상태 정의 확인
+                if "빈 상태" not in comp_content:
+                    errors.append(LintError(fname, 0, "WARNING",
+                        "화면 구성 요소에 '빈 상태' 정의가 없습니다. 데이터 0건 시 UI를 정의하세요"))
+
+                # 참조 Spec 확인
+                api_refs = re.findall(r"LMS-API-[A-Z]+-\d+", comp_content)
+                if not api_refs:
+                    errors.append(LintError(fname, 0, "WARNING",
+                        "화면 구성 요소에 API Spec 참조(LMS-API-xxx)가 없습니다"))
+
+    # ── e2e_test_spec: 데이터 시딩 + 조회 검증 ──
     if spec["type"] == "e2e_test_spec":
+        if "관련 Backend Spec" not in spec["sections"]:
+            errors.append(LintError(fname, 0, "ERROR", "E2E Spec에 ## 관련 Backend Spec 없음"))
+        else:
+            ids = re.findall(r"LMS-(?:[A-Z]+-)+\d+", spec["sections"]["관련 Backend Spec"])
+            if not ids:
+                errors.append(LintError(fname, 0, "ERROR", "## 관련 Backend Spec에 참조 ID 없음"))
+
         if "테스트 시나리오" in spec["sections"]:
             tc = spec["sections"]["테스트 시나리오"]
             ids = TC_FE_PATTERN.findall(tc)
             if len(ids) < 2:
                 errors.append(LintError(fname, 0, "ERROR", f"E2E 시나리오 {len(ids)}개, 최소 2개 필요"))
-            lines = tc.split("\n")
-            if not any("Given:" in l or "Given :" in l for l in lines):
-                errors.append(LintError(fname, 0, "WARNING", "Given-When-Then 불완전"))
+            if len(ids) != len(set(ids)):
+                errors.append(LintError(fname, 0, "ERROR", "TC-FE ID 중복"))
 
-    # 참조 링크
+            lines = tc.split("\n")
+            has_given = any("Given:" in l or "Given :" in l for l in lines)
+            has_when = any("When:" in l or "When :" in l for l in lines)
+            has_then = any("Then:" in l or "Then :" in l for l in lines)
+            if not (has_given and has_when and has_then):
+                missing = [x for x, ok in [("Given",has_given),("When",has_when),("Then",has_then)] if not ok]
+                errors.append(LintError(fname, 0, "WARNING", f"Given-When-Then 불완전: {'/'.join(missing)} 없음"))
+
+            # 데이터 시딩 확인 (Given에 Backend 데이터 언급)
+            given_sections = []
+            in_given = False
+            for line in lines:
+                if "Given:" in line or "Given :" in line:
+                    in_given = True
+                elif ("When:" in line or "When :" in line or
+                      "Then:" in line or "Then :" in line or
+                      line.startswith("### ")):
+                    in_given = False
+                if in_given:
+                    given_sections.append(line)
+            given_text = " ".join(given_sections)
+            has_data_prep = any(kw in given_text for kw in
+                ["Backend 데이터", "데이터 준비", "seed", "init-data", "로그인"])
+            if not has_data_prep:
+                errors.append(LintError(fname, 0, "WARNING",
+                    "E2E Given에 데이터 준비(Backend 데이터/시딩) 내용이 없습니다"))
+
+            # 조회 검증 확인 (Then에 표시/텍스트 확인)
+            then_sections = []
+            in_then = False
+            for line in lines:
+                if "Then:" in line or "Then :" in line:
+                    in_then = True
+                elif ("Given:" in line or "Given :" in line or
+                      "When:" in line or "When :" in line or
+                      line.startswith("### ")):
+                    in_then = False
+                if in_then:
+                    then_sections.append(line)
+            then_text = " ".join(then_sections)
+            has_view_check = any(kw in then_text for kw in
+                ["표시", "텍스트", "목록", "건", "메시지", "배지", "미표시", "이동"])
+            if not has_view_check:
+                errors.append(LintError(fname, 0, "WARNING",
+                    "E2E Then에 화면 조회 검증(표시/텍스트 확인) 내용이 없습니다"))
+
+    # ── 공통: 참조 링크, 모호한 표현 ──
     if spec["type"] in ("use_case", "api_spec"):
         for ref in ("관련 정책", "관련 Spec"):
-            if ref in spec["sections"] and not re.findall(r"[A-Z]+-[A-Z]*-?\d+", spec["sections"][ref]):
+            if ref in spec["sections"] and not re.findall(r"(?:[A-Z]+-)+\d+", spec["sections"][ref]):
                 errors.append(LintError(fname, 0, "WARNING", f"## {ref}에 참조 ID 없음"))
 
-    # 검증 조건 모호성
     if "검증 조건" in spec["sections"]:
         items = [l.strip() for l in spec["sections"]["검증 조건"].split("\n") if l.strip().startswith("- ")]
         if not items: errors.append(LintError(fname, 0, "ERROR", "검증 조건 항목 없음"))
@@ -170,8 +245,7 @@ def lint_directory(dirpath):
     files = sorted(Path(dirpath).rglob("*.md"))
     if not files: print(f"⚠ {dirpath}에 Spec 없음"); return all_errors
 
-    all_ids = set()
-    all_tc = set()
+    all_ids, all_tc = set(), set()
     for f in files:
         try:
             sp = parse_spec(f)
@@ -187,14 +261,15 @@ def lint_directory(dirpath):
             sp = parse_spec(f)
             for ref in ("관련 정책", "관련 Spec", "관련 Backend Spec"):
                 if ref in sp["sections"]:
-                    for rid in re.findall(r"([A-Z]+-[A-Z]*-?\d+)", sp["sections"][ref]):
+                    for rid in re.findall(r"((?:[A-Z]+-)+\d+)", sp["sections"][ref]):
                         if rid not in all_ids and not rid.startswith("POLICY-CORP-"):
                             errs.append(LintError(str(f), 0, "WARNING", f"참조 '{rid}' 미존재"))
         except: pass
         all_errors.extend(errs)
 
-    nfr = any("POLICY-NFR" in str(f) for f in files)
-    if not nfr: all_errors.append(LintError("policies/", 0, "ERROR", "POLICY-NFR-001 없음"))
+    if not any("frontend" in str(dirpath).lower() for _ in [1]):
+        if not any("POLICY-NFR" in str(f) for f in files):
+            all_errors.append(LintError("policies/", 0, "ERROR", "POLICY-NFR-001 없음"))
 
     if all_tc:
         be = [t for t in all_tc if not t.startswith("TC-FE")]
