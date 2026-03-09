@@ -1,102 +1,66 @@
-# LMS-PAY-007: 급여정책조회
+# LMS-PAY-007 급여정책조회
 
 ## 기본 정보
 - type: use_case
+- id: LMS-PAY-007
 - domain: payroll
+- last-updated: 2026-03-09
+
+## 관련 정책
+- POLICY-PAYROLL-001: 급여 정책 유형 (§4), 가산율 정책 (§3)
+- POLICY-NFR-001: 성능 요구사항 (§5)
 
 ## 관련 Spec
-- LMS-API-PAY-001 (급여API)
-- LMS-PAY-001 (급여정책등록)
-
-## 개요
-인증된 사용자가 현재 유효한 급여 정책을 조회하거나, 관리자가 정책 유형별로 조회한다.
+- LMS-PAY-001-급여정책등록 (선행)
+- LMS-API-PAY-001-급여API (GET /api/payroll-policies, GET /api/payroll-policies/active)
 
 ## 관련 모델
-- 주 모델: PayrollPolicy (Aggregate Root)
-- 참조 모델: PolicyType, PolicyMultiplier, PolicyEffectivePeriod, PayrollPolicyId
+- **주 모델**: `PayrollPolicy` (Aggregate Root)
+- 참조 모델: `PolicyType` (Enum), `PolicyMultiplier` (Value Object), `PolicyEffectivePeriod` (Value Object)
 
-## 선행 조건
-- 인증된 사용자여야 한다
+## 개요
+인증된 사용자가 급여 정책 목록을 조회한다. 현재 유효한 정책만 조회하거나, 정책 유형(PolicyType)별로 필터링하여 조회할 수 있다.
 
 ## 기본 흐름
 
-### 흐름 1: 현재 유효한 정책 조회
-1. 사용자가 현재 유효한 급여 정책 조회를 요청한다
-2. 시스템은 현재 날짜 기준으로 유효한 모든 정책을 조회한다
-3. 시스템은 정책 목록과 총 건수를 반환한다
-   - 각 정책: ID, 정책 유형, 정책 유형 설명, 배율, 시작일, 종료일, 설명, 유효 여부, 생성일
-- 권한: EMPLOYEE, MANAGER, SUPER_ADMIN
+### 흐름 A: 현재 유효 정책 조회 (GET /api/payroll-policies/active)
+1. 인증된 사용자(EMPLOYEE, MANAGER, SUPER_ADMIN)가 현재 유효한 정책 조회를 요청한다.
+2. 시스템이 isCurrentlyEffective == true인 PayrollPolicy 목록을 조회한다.
+3. 시스템이 정책 목록과 총 건수(totalCount)를 반환한다 (HTTP 200).
 
-### 흐름 2: 정책 유형별 조회
-1. 관리자가 정책 유형을 지정하여 조회를 요청한다
-2. 시스템은 해당 유형의 모든 정책(과거/현재 포함)을 조회한다
-3. 시스템은 정책 목록과 총 건수를 반환한다
-- 권한: MANAGER, SUPER_ADMIN
-
-### 흐름 3: 전체 정책 조회 (유형 미지정)
-1. 관리자가 정책 유형 없이 조회를 요청한다
-2. 시스템은 현재 유효한 모든 정책을 반환한다
-- 권한: MANAGER, SUPER_ADMIN
+### 흐름 B: 정책 유형별 조회 (GET /api/payroll-policies?policyType={type})
+1. MANAGER 또는 SUPER_ADMIN이 정책 유형(policyType, 선택)을 지정하여 조회를 요청한다.
+2. policyType이 지정된 경우 해당 유형의 PayrollPolicy 목록을, 미지정인 경우 현재 유효한 전체 정책 목록을 조회한다.
+3. 시스템이 정책 목록과 총 건수(totalCount)를 반환한다 (HTTP 200).
 
 ## 대안 흐름
-- 조건에 맞는 정책이 없는 경우: 빈 목록과 totalCount 0을 반환한다
-
-## 예외 흐름
-- 없음 (조회 실패 시 빈 목록 반환)
+- **AF-1**: 조회 결과가 0건인 경우 → 빈 배열([])과 totalCount: 0을 반환한다. HTTP 200이 반환된다.
+- **AF-2**: 인증 토큰이 없거나 만료된 경우 → HTTP 401을 반환한다.
+- **AF-3**: EMPLOYEE가 정책 유형별 조회(흐름 B)를 시도하는 경우 → HTTP 403을 반환한다.
 
 ## 검증 조건
-- 정책 유형(policyType)이 제공된 경우 유효한 PolicyType 열거값이어야 한다
-  - OVERTIME_WEEKDAY, OVERTIME_WEEKEND, OVERTIME_HOLIDAY, NIGHT_SHIFT, HOLIDAY_WORK, BONUS, ALLOWANCE
-- 응답에 현재 유효 여부(isCurrentlyEffective)가 포함되어야 한다
-
-## 관련 정책
-- POLICY-PAYROLL-001 참조 (정책 유형 정의, 유효 기간 규칙)
-- POLICY-NFR-001 참조
+- 정책 유형별 조회(GET /api/payroll-policies?policyType={type})는 MANAGER 또는 SUPER_ADMIN만 가능하다. 위반 시 HTTP 403
+- policyType 필터가 지정된 경우 PolicyType ENUM 값(OVERTIME_WEEKDAY, NIGHT_SHIFT, HOLIDAY_WORK, OVERTIME_WEEKEND) 중 하나여야 한다. 위반 시 HTTP 400
 
 ## 비기능 요구사항
-- POLICY-NFR-001 참조
-- 조회 API는 읽기 전용 트랜잭션으로 처리한다
+- **POLICY-NFR-001 §5.1**: API 응답 시간 500ms 이내.
 
 ## 테스트 시나리오
 
-### TC-PAY-007-01: 현재 유효한 정책 조회 - 정상 (Integration)
+### TC-PAY-007-01: 현재 유효 정책 조회 성공
+- **레벨**: Integration
+- **Given**: 현재 유효한 정책이 4건(OVERTIME_WEEKDAY, NIGHT_SHIFT, HOLIDAY_WORK, OVERTIME_WEEKEND) 존재하고, 종료된 정책이 1건 존재한다.
+- **When**: EMPLOYEE가 현재 유효 정책을 조회한다 (GET /api/payroll-policies/active).
+- **Then**: 4건의 정책이 반환되고, totalCount는 4이다. 각 항목에 id, policyType, policyTypeDescription, multiplier, effectiveFrom, effectiveTo, isCurrentlyEffective=true가 포함된다. HTTP 200이 반환된다.
 
-- Given: 현재 유효한 정책 3건 존재 (OVERTIME_WEEKDAY, NIGHT_SHIFT, OVERTIME_HOLIDAY)
-- When: 현재 유효한 급여 정책 조회 요청
-- Then: 정책 3건이 반환되고, 각 정책에 isCurrentlyEffective=true 포함
+### TC-PAY-007-02: 정책 유형별 필터링 조회 성공
+- **레벨**: Integration
+- **Given**: NIGHT_SHIFT 유형의 정책이 2건 존재한다.
+- **When**: SUPER_ADMIN이 policyType=NIGHT_SHIFT로 조회한다 (GET /api/payroll-policies?policyType=NIGHT_SHIFT).
+- **Then**: 2건의 NIGHT_SHIFT 정책이 반환된다. HTTP 200이 반환된다.
 
-### TC-PAY-007-02: 정책 유형별 조회 - 정상 (Integration)
-
-- Given: MANAGER 권한 사용자가 로그인하고, OVERTIME_WEEKDAY 유형의 정책이 과거 2건 + 현재 1건 존재
-- When: 정책 유형 OVERTIME_WEEKDAY로 조회 요청
-- Then: 해당 유형의 정책 3건이 반환되고 총 건수 3
-
-### TC-PAY-007-03: 조건에 맞는 정책이 없는 경우 (Integration)
-
-- Given: BONUS 유형의 정책이 존재하지 않음
-- When: 정책 유형 BONUS로 조회 요청
-- Then: 빈 목록과 totalCount 0 반환
-
-### TC-PAY-007-04: 전체 정책 조회 - 유형 미지정 (Integration)
-
-- Given: SUPER_ADMIN 권한 사용자가 로그인하고, 현재 유효한 정책 5건 존재
-- When: 정책 유형 없이 조회 요청
-- Then: 현재 유효한 모든 정책 5건이 반환됨
-
-### TC-PAY-007-05: 유효하지 않은 정책 유형 요청 (E2E)
-
-- Given: 인증된 사용자가 로그인한 상태
-- When: 잘못된 정책 유형 "INVALID_TYPE"으로 조회 API 호출
-- Then: 400 Bad Request 응답 반환
-
-### TC-PAY-007-06: EMPLOYEE 권한으로 현재 유효한 정책 조회 가능 (E2E)
-
-- Given: EMPLOYEE 권한 사용자가 로그인한 상태
-- When: 현재 유효한 급여 정책 조회 API 호출
-- Then: 200 OK 응답과 함께 정책 목록 반환
-
-### TC-PAY-007-07: 정책 유효 여부 필드 포함 검증 (E2E)
-
-- Given: 유효 기간이 만료된 정책과 현재 유효한 정책이 혼재
-- When: 특정 유형으로 정책 조회 API 호출
-- Then: 각 정책 응답에 isCurrentlyEffective 필드가 포함되고, 만료 정책은 false, 유효 정책은 true
+### TC-PAY-007-03: EMPLOYEE의 유형별 조회 시도 시 권한 오류
+- **레벨**: Unit
+- **Given**: EMPLOYEE가 인증되어 있다.
+- **When**: EMPLOYEE가 유형별 정책 조회를 시도한다 (GET /api/payroll-policies?policyType=NIGHT_SHIFT).
+- **Then**: HTTP 403이 반환된다.

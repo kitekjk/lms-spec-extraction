@@ -1,8 +1,9 @@
-# LMS-API-USER-001: 인증API
+# LMS-API-USER-001 인증API
 
 ## 기본 정보
 - type: api_spec
 - domain: user
+- id: LMS-API-USER-001
 
 ## 관련 Spec
 - LMS-USER-001 (로그인)
@@ -12,92 +13,120 @@
 ## 엔드포인트 목록
 
 ### POST /api/auth/login
-- 설명: 이메일과 비밀번호로 로그인하여 액세스 토큰과 리프레시 토큰을 발급받는다
-- 권한: 인증 불필요 (Public)
-- 관련 Use Case: LMS-USER-001
-- Request:
+- 설명: 이메일과 비밀번호로 로그인하여 JWT 토큰을 발급받는다
+- 권한: 전체 (비인증)
+- Request Body:
   ```json
   {
     "email": "string (필수, 이메일 형식)",
     "password": "string (필수, 최소 8자)"
   }
   ```
-- Response (200):
+- Response 200:
   ```json
   {
-    "accessToken": "string",
-    "refreshToken": "string",
+    "accessToken": "string (JWT)",
+    "refreshToken": "string (JWT)",
     "userInfo": {
-      "userId": "string",
+      "userId": "string (UUID)",
       "email": "string",
-      "role": "string",
+      "role": "string (SUPER_ADMIN | MANAGER | EMPLOYEE)",
       "isActive": "boolean"
     }
   }
   ```
 - 에러 응답:
-  - 400: 유효성 검증 실패 (VALIDATION_ERROR)
-  - 401: 인증 실패 - 이메일 또는 비밀번호 불일치 (AUTH001)
-  - 403: 비활성화된 사용자 (AUTH002)
+  | HTTP 상태 | 에러코드 | 설명 |
+  |-----------|---------|------|
+  | 400 | VALIDATION_ERROR | 이메일 형식 오류, 비밀번호 8자 미만 |
+  | 401 | AUTH001 | 이메일 또는 비밀번호 불일치 |
+  | 403 | AUTH002 | 비활성화된 사용자 |
+
+---
 
 ### POST /api/auth/register
-- 설명: 새로운 사용자를 등록한다 (SUPER_ADMIN 전용)
+- 설명: 새로운 사용자를 등록한다
 - 권한: SUPER_ADMIN
-- 관련 Use Case: LMS-USER-002
-- Request:
+- 인증: Authorization: Bearer {accessToken}
+- Request Body:
   ```json
   {
     "email": "string (필수, 이메일 형식)",
     "password": "string (필수, 최소 8자)",
     "role": "string (필수, SUPER_ADMIN | MANAGER | EMPLOYEE)",
-    "storeId": "string (선택)"
+    "storeId": "string? (선택, UUID)"
   }
   ```
-- Response (201):
+- Response 201:
   ```json
   {
-    "userId": "string",
+    "userId": "string (UUID)",
     "email": "string",
-    "role": "string",
-    "isActive": "boolean"
+    "role": "string (SUPER_ADMIN | MANAGER | EMPLOYEE)",
+    "isActive": "boolean (항상 true)"
   }
   ```
 - 에러 응답:
-  - 400: 유효성 검증 실패 (VALIDATION_ERROR)
-  - 401: 인증 실패
-  - 403: 권한 없음 (SUPER_ADMIN 권한 필요)
-  - 409: 중복된 이메일 (REG001)
+  | HTTP 상태 | 에러코드 | 설명 |
+  |-----------|---------|------|
+  | 400 | VALIDATION_ERROR | 이메일 형식 오류, 비밀번호 8자 미만, 역할 빈 문자열 |
+  | 400 | REG002 | 유효하지 않은 역할 (SUPER_ADMIN, MANAGER, EMPLOYEE 이외) |
+  | 401 | - | 인증 토큰 없음 또는 만료 |
+  | 403 | - | SUPER_ADMIN 이외 역할의 접근 |
+  | 409 | REG001 | 중복된 이메일 |
+
+---
 
 ### POST /api/auth/refresh
-- 설명: 리프레시 토큰을 사용하여 새로운 액세스 토큰을 발급받는다
-- 권한: 인증 불필요 (Public)
-- 관련 Use Case: LMS-USER-003
-- Request:
+- 설명: Refresh Token으로 새로운 Access Token을 발급받는다
+- 권한: 전체 (비인증)
+- Request Body:
   ```json
   {
-    "refreshToken": "string (필수)"
+    "refreshToken": "string (필수, JWT)"
   }
   ```
-- Response (200):
+- Response 200:
   ```json
   {
-    "accessToken": "string"
+    "accessToken": "string (JWT)"
   }
   ```
 - 에러 응답:
-  - 400: 잘못된 요청
-  - 401: 유효하지 않은 리프레시 토큰 (TOKEN001)
+  | HTTP 상태 | 에러코드 | 설명 |
+  |-----------|---------|------|
+  | 400 | VALIDATION_ERROR | refreshToken 빈 문자열 |
+  | 401 | TOKEN001 | 유효하지 않은 Refresh Token (만료, 변조) |
+  | 401 | TOKEN002 | 토큰의 사용자가 존재하지 않음 |
+  | 401 | TOKEN003 | 토큰의 사용자가 비활성 상태 |
+
+---
 
 ### POST /api/auth/logout
-- 설명: 로그아웃 처리 (클라이언트에서 토큰 삭제 필요)
-- 권한: 인증 불필요 (Public)
-- 관련 Use Case: 없음 (클라이언트 측 처리)
-- Request: 없음
-- Response (200):
+- 설명: 로그아웃한다 (클라이언트에서 토큰 삭제)
+- 권한: 인증된 사용자
+- 인증: Authorization: Bearer {accessToken}
+- Request Body: 없음
+- Response 200:
   ```json
   {
     "message": "로그아웃 되었습니다"
   }
   ```
-- 에러 응답: 없음
-- 비고: 현재 서버 측 Refresh Token 무효화 미구현 (TODO)
+- 비고: 현재 서버 측 Refresh Token 무효화 미구현. 클라이언트에서 토큰 삭제만 수행.
+
+## 공통 에러 응답 형식
+```json
+{
+  "code": "string (에러코드)",
+  "message": "string (에러 메시지)",
+  "timestamp": "string (ISO 8601, e.g. 2026-03-09T09:00:00Z)"
+}
+```
+
+## JWT 토큰 규격
+- 서명 알고리즘: HS256
+- Access Token 유효시간: 3,600,000ms (1시간)
+- Refresh Token 유효시간: 604,800,000ms (7일)
+- Access Token 클레임: employeeId(sub), role, storeId(nullable)
+- 전달 방식: Authorization: Bearer {accessToken}

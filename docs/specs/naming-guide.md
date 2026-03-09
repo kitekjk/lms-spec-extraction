@@ -2,332 +2,199 @@
 
 ## 기본 정보
 - type: naming_guide
-- language: Kotlin
-- style: Kotlin idiomatic (camelCase, PascalCase)
+- service: lms-backend
+- language: Kotlin 2.1.x
 
----
+## 패키지
 
-## 패키지 네이밍
+### 루트 패키지
+```
+com.lms.domain          # domain 모듈
+com.lms.application     # application 모듈
+com.lms.infrastructure  # infrastructure 모듈
+com.lms.interfaces      # interfaces 모듈
+```
 
-| 레이어 | 패키지 패턴 | 예시 |
-|--------|-------------|------|
-| domain/model | `com.lms.domain.model.{aggregate}` | `com.lms.domain.model.user`, `com.lms.domain.model.payroll` |
-| domain/service | `com.lms.domain.service` | `com.lms.domain.service` |
-| domain/exception | `com.lms.domain.exception` | `com.lms.domain.exception` |
-| domain/common | `com.lms.domain.common` | `com.lms.domain.common` |
-| application | `com.lms.application.{context}` | `com.lms.application.user` |
-| infrastructure/persistence | `com.lms.infrastructure.persistence.{aggregate}` | `com.lms.infrastructure.persistence.user` |
-| infrastructure/security | `com.lms.infrastructure.security` | `com.lms.infrastructure.security` |
-| infrastructure/config | `com.lms.infrastructure.config` | `com.lms.infrastructure.config` |
-| interfaces/web | `com.lms.interfaces.web.controller` | `com.lms.interfaces.web.controller` |
-| interfaces/dto | `com.lms.interfaces.web.dto` | `com.lms.interfaces.web.dto` |
+### domain 모듈 패키지
 
-**규칙:**
-- 패키지명은 소문자, 단수형 사용
-- Aggregate 이름을 서브패키지 구분자로 사용: `user`, `employee`, `store`, `attendance`, `schedule`, `leave`, `payroll`, `auditlog`, `auth`
+| 패키지 경로 | 용도 |
+|------------|------|
+| `com.lms.domain.common` | 공통 도메인 객체 (DomainContext) |
+| `com.lms.domain.exception` | 도메인 예외 클래스 |
+| `com.lms.domain.model.{도메인}` | Aggregate Root, Entity, Value Object, Repository Interface, Enum |
+| `com.lms.domain.service` | Domain Service (교차 Aggregate 로직) |
 
----
+도메인별 패키지명:
 
-## 클래스 네이밍
+| 도메인 | 패키지명 |
+|--------|---------|
+| 사용자 | `model.user` |
+| 근로자 | `model.employee` |
+| 매장 | `model.store` |
+| 출퇴근 | `model.attendance` |
+| 근무일정 | `model.schedule` |
+| 휴가 | `model.leave` |
+| 급여 | `model.payroll` |
+| 감사로그 | `model.auditlog` |
+| 인증 | `model.auth` |
+
+### application 모듈 패키지
+
+| 패키지 경로 | 용도 |
+|------------|------|
+| `com.lms.application.{도메인}` | 해당 도메인의 AppService, Command, Result 클래스 |
+
+도메인별 패키지명:
+
+| 도메인 | 패키지명 |
+|--------|---------|
+| 인증 | `auth` |
+| 근로자 | `employee` |
+| 매장 | `store` |
+| 출퇴근 | `attendance` |
+| 근무일정 | `schedule` |
+| 휴가 | `leave` |
+| 급여/급여정책 | `payroll` |
+
+### infrastructure 모듈 패키지
+
+| 패키지 경로 | 용도 |
+|------------|------|
+| `com.lms.infrastructure.persistence` | JPA Entity, Spring Data Repository, Repository 구현체 |
+| `com.lms.infrastructure.security` | JWT, Security Filter, SecurityUtils |
+| `com.lms.infrastructure.config` | 기술 설정 (DB, CORS, Jackson, Properties) |
+
+### interfaces 모듈 패키지
+
+| 패키지 경로 | 용도 |
+|------------|------|
+| `com.lms.interfaces.web.controller` | REST Controller |
+| `com.lms.interfaces.web.dto` | Request/Response DTO |
+| `com.lms.interfaces` | Spring Boot 진입점 (`LmsApplication.kt`) |
+
+## 클래스
 
 ### Aggregate Root / Entity
-- PascalCase, 도메인 개념 명사
-- `data class` + `private constructor`
 
-| 패턴 | 예시 |
-|------|------|
-| `{DomainConcept}` | `User`, `Employee`, `Store`, `AttendanceRecord`, `WorkSchedule`, `LeaveRequest`, `Payroll`, `PayrollPolicy`, `PayrollBatchHistory`, `AuditLog`, `PayrollDetail` |
-
-### Value Object (ID)
-- `{AggregateRoot}Id` 패턴
-- `@JvmInline value class`
-
-| 패턴 | 예시 |
-|------|------|
-| `{AggregateRoot}Id` | `UserId`, `EmployeeId`, `StoreId`, `AttendanceRecordId`, `WorkScheduleId`, `LeaveRequestId`, `PayrollId`, `PayrollPolicyId`, `PayrollDetailId`, `PayrollBatchHistoryId`, `AuditLogId` |
-
-### Value Object (일반)
-- 도메인 의미를 반영하는 명사
-- `@JvmInline value class` 또는 `data class`
-
-| 패턴 | 예시 | 구현 |
+| 분류 | 패턴 | 예시 |
 |------|------|------|
-| 단일 값 래핑 | `Email`, `Password`, `EmployeeName`, `StoreName`, `StoreLocation`, `RemainingLeave`, `PayrollPeriod`, `PolicyMultiplier` | `@JvmInline value class` |
-| 복합 값 | `AttendanceTime`, `WorkTime`, `LeavePeriod`, `PayrollAmount`, `PolicyEffectivePeriod` | `data class` |
+| Aggregate Root | `{도메인명}` (단수형) | `User`, `Employee`, `Store`, `AttendanceRecord`, `WorkSchedule`, `LeaveRequest`, `Payroll`, `PayrollPolicy`, `AuditLog` |
 
-### Enum / Sealed Class
-- PascalCase, 도메인 개념 반영
+### Value Object
 
-| 패턴 | 예시 | 구현 |
+| 분류 | 패턴 | 예시 |
 |------|------|------|
-| `{Domain}Type` | `EmployeeType`, `LeaveType`, `PolicyType`, `WorkType` | `enum class` |
-| `{Domain}Status` | `AttendanceStatus`, `LeaveStatus`, `BatchStatus` | `enum class` |
-| `{Domain}` | `Role` | `enum class` |
-| 다형성 필요 시 | `ActionType`, `EntityType` | `sealed class` |
+| 식별자 | `{AggregateRoot}Id` | `UserId`, `EmployeeId`, `StoreId`, `AttendanceRecordId`, `WorkScheduleId`, `LeaveRequestId`, `PayrollId`, `PayrollPolicyId`, `AuditLogId`, `PayrollDetailId` |
+| 도메인 값 | `{의미있는이름}` | `Email`, `Password`, `EmployeeName`, `RemainingLeave`, `StoreName`, `StoreLocation`, `AttendanceTime`, `WorkDate`, `WorkTime`, `LeavePeriod`, `PayrollAmount`, `PayrollPeriod`, `PolicyMultiplier`, `PolicyEffectivePeriod` |
 
-### Repository 인터페이스
-- `{AggregateRoot}Repository` 패턴
-- domain 모듈에 `interface`로 정의
+### Enum
 
-| 패턴 | 예시 |
-|------|------|
-| `{AggregateRoot}Repository` | `UserRepository`, `EmployeeRepository`, `StoreRepository`, `AttendanceRecordRepository`, `WorkScheduleRepository`, `LeaveRequestRepository`, `PayrollRepository`, `PayrollPolicyRepository`, `PayrollDetailRepository`, `PayrollBatchHistoryRepository`, `AuditLogRepository` |
+| 분류 | 패턴 | 예시 |
+|------|------|------|
+| 역할 | `Role` | SUPER_ADMIN, MANAGER, EMPLOYEE |
+| 유형 | `{도메인}Type` | `EmployeeType`, `LeaveType`, `PolicyType`, `WorkType` |
+| 상태 | `{도메인}Status` | `AttendanceStatus`, `LeaveStatus` |
+| 감사 | `ActionType`, `EntityType` | CREATE, UPDATE, DELETE / USER, EMPLOYEE, STORE |
 
-### Repository 구현체
-- `{AggregateRoot}RepositoryImpl` 패턴
-- infrastructure 모듈에 위치
+### Domain Exception
 
-| 패턴 | 예시 |
-|------|------|
-| `{AggregateRoot}RepositoryImpl` | `UserRepositoryImpl`, `EmployeeRepositoryImpl` |
+| 분류 | 패턴 | 예시 |
+|------|------|------|
+| 기반 클래스 | `DomainException` | - |
+| 도메인별 | `{도메인명}Exception` | `AttendanceException`, `AuthException`, `EmployeeException`, `LeaveException`, `PayrollException`, `PayrollPolicyException`, `RegistrationException`, `StoreException`, `WorkScheduleException` |
+| 에러 코드 | `ErrorCode` (Enum) | - |
 
 ### Domain Service
-- `{Domain}PolicyService` 또는 `{Domain}Engine` 패턴
-- domain/service에 위치
 
-| 패턴 | 예시 |
-|------|------|
-| `{Domain}PolicyService` | `LeavePolicyService` |
-| `{Domain}CalculationEngine` | `PayrollCalculationEngine` |
+| 분류 | 패턴 | 예시 |
+|------|------|------|
+| Domain Service | `{비즈니스행위}Service` | `LeavePolicyService`, `PayrollCalculationEngine` |
+
+### Repository Interface (domain)
+
+| 분류 | 패턴 | 예시 |
+|------|------|------|
+| Repository | `{AggregateRoot}Repository` | `UserRepository`, `EmployeeRepository`, `StoreRepository`, `AttendanceRecordRepository`, `WorkScheduleRepository`, `LeaveRequestRepository`, `PayrollRepository`, `PayrollPolicyRepository`, `PayrollDetailRepository`, `PayrollBatchHistoryRepository`, `AuditLogRepository` |
 
 ### Application Service
-- `{UseCase}AppService` 패턴
-- 하나의 public 메서드 보유
 
-| 패턴 | 예시 |
-|------|------|
-| `{Action}{Domain}AppService` | `PlaceOrderAppService` (예시), `CreateEmployeeAppService` |
+| 분류 | 패턴 | 예시 |
+|------|------|------|
+| AppService | `{동사}{대상}AppService` | `CreateEmployeeAppService`, `GetEmployeeAppService`, `UpdateEmployeeAppService`, `DeactivateEmployeeAppService`, `CheckInAppService`, `CheckOutAppService`, `ApproveLeaveRequestAppService`, `CalculatePayrollAppService`, `ExecutePayrollBatchAppService`, `LoginAppService`, `RegisterAppService` |
+| Command | `{동사}{대상}Command` | `CreateEmployeeCommand`, `CheckInCommand`, `ApproveLeaveRequestCommand` |
+| Result | `{동사}{대상}Result` 또는 `{대상}Result` | `CreateEmployeeResult`, `LoginResult` |
 
-### REST Controller
-- `{Domain}Controller` 패턴
-- interfaces/web/controller에 위치
+### Infrastructure 클래스
 
-| 패턴 | 예시 |
-|------|------|
-| `{Domain}Controller` | `OrderController` (예시), `UserController` |
+| 분류 | 패턴 | 예시 |
+|------|------|------|
+| JPA Entity | `Jpa{AggregateRoot}` | `JpaUser`, `JpaEmployee`, `JpaStore` |
+| Spring Data Repository | `SpringData{AggregateRoot}Repository` | `SpringDataUserRepository`, `SpringDataEmployeeRepository` |
+| Repository 구현체 | `{AggregateRoot}RepositoryImpl` | `UserRepositoryImpl`, `EmployeeRepositoryImpl` |
+| Security | 기능 기반 이름 | `JwtTokenProvider`, `JwtAuthenticationFilter`, `SecurityUtils`, `SecurityConfig` |
+| Config | `{기능}Config` 또는 `{기능}Properties` | `JwtProperties`, `WebConfig`, `CorsConfig` |
 
-### DTO
-- `{Action}{Domain}Request` / `{Action}{Domain}Response` 패턴
-- interfaces/web/dto에 위치
+### Interfaces 클래스
 
-| 패턴 | 예시 |
-|------|------|
-| `{UseCase}Request` | `PlaceOrderRequest` (예시) |
-| `{UseCase}Response` | `OrderResponse` (예시) |
-
-### Application Layer DTO
-- `{UseCase}Command` / `{UseCase}Result` 패턴
-
-| 패턴 | 예시 |
-|------|------|
-| `{UseCase}Command` | `PlaceOrderCommand` (예시) |
-| `{UseCase}Result` | `OrderResult` (예시) |
-
-### Exception
-- `{상황}Exception` 패턴
-- DomainException을 상속
-
-| 패턴 | 예시 |
-|------|------|
-| `{Entity}NotFoundException` | `AttendanceNotFoundException`, `PayrollNotFoundException`, `LeaveRequestNotFoundException`, `PayrollPolicyNotFoundException` |
-| `{상황}Exception` | `AlreadyCheckedInException`, `NotCheckedInException`, `InsufficientLeaveBalanceException`, `PayrollAlreadyCalculatedException` |
-| `Duplicate{Field}Exception` | `DuplicateEmailException`, `DuplicateStoreNameException` |
-| `Invalid{Concept}Exception` | `InvalidRoleException`, `InvalidLeaveDateRangeException`, `InvalidPolicyPeriodException` |
-
-### Configuration
-- `{Feature}Properties` / `{Feature}Config` 패턴
-
-| 패턴 | 예시 |
-|------|------|
-| `{Feature}Properties` | `JwtProperties` |
-| `{Feature}Config` | `JpaConfig` |
-
-### Converter (JPA)
-- `{Enum}Converter` 패턴
-- `@Converter(autoApply = true)`
-
-| 패턴 | 예시 |
-|------|------|
-| `{Enum}Converter` | `RoleConverter` |
-
----
-
-## 파일 네이밍 컨벤션
-
-### 파일명 = 클래스명
-- 1파일 1클래스 원칙
-- 파일명은 PascalCase
-
-| 파일명 | 내용 |
-|--------|------|
-| `User.kt` | User Aggregate Root |
-| `UserId.kt` | UserId Value Object |
-| `UserRepository.kt` | UserRepository 인터페이스 |
-| `LeavePolicyService.kt` | LeavePolicyService 도메인 서비스 |
-| `ErrorCode.kt` | ErrorCode 상수 object |
-| `DomainException.kt` | DomainException abstract class |
-| `AttendanceException.kt` | 출퇴근 관련 예외 모음 (동일 도메인 예외 그룹핑 허용) |
-
-### 예외: 관련 클래스 그룹핑
-- 동일 도메인의 예외 클래스는 하나의 파일에 그룹핑 가능
-- 예: `AttendanceException.kt`에 `AttendanceNotFoundException`, `AlreadyCheckedInException`, `NotCheckedInException`, `AlreadyCheckedOutException` 포함
-- 예: `PayrollBatchHistory.kt`에 `PayrollBatchHistory`, `BatchStatus`, `PayrollBatchHistoryId` 포함
-
----
-
-## ID 타입 컨벤션
-
-- 모든 Aggregate Root의 식별자는 전용 Value Object 사용
-- `@JvmInline value class`로 구현
-- 내부 값 타입: `String` (UUID 문자열)
-- 표준 팩토리 메서드:
-  - `generate()`: UUID 기반 새 ID 생성
-  - `from(value: String)`: 문자열에서 복원
-- `init` 블록에서 `require(value.isNotBlank())` 검증 (일부 ID는 private constructor 사용)
-
-```
-패턴:
-@JvmInline
-value class {Name}Id(val value: String) {
-    init {
-        require(value.isNotBlank()) { "{Name}Id는 비어있을 수 없습니다." }
-    }
-    companion object {
-        fun generate(): {Name}Id = {Name}Id(UUID.randomUUID().toString())
-        fun from(value: String): {Name}Id = {Name}Id(value)
-    }
-}
-```
-
----
-
-## Value Object 컨벤션
-
-### 단일 값 래핑 (Inline Value Class)
-- `@JvmInline value class` 사용
-- `init` 블록에서 유효성 검증
-- 한국어 에러 메시지
-
-```
-패턴:
-@JvmInline
-value class {Name}(val value: {Type}) {
-    init {
-        require(검증조건) { "한국어 에러 메시지" }
-    }
-}
-```
-
-### 복합 값 (Data Class)
-- `data class` 사용
-- `init` 블록에서 필드 간 관계 검증
-- 비즈니스 메서드 포함 가능
-
-```
-패턴:
-data class {Name}(val field1: Type1, val field2: Type2) {
-    init {
-        require(field1과 field2의 관계 검증) { "한국어 에러 메시지" }
-    }
-    fun businessMethod(): ReturnType { ... }
-}
-```
-
-### 팩토리 메서드 네이밍
-| 메서드 | 용도 | 예시 |
-|--------|------|------|
-| `create(context, ...)` | Aggregate 신규 생성 | `User.create(context, email, password, role)` |
-| `reconstruct(...)` | Repository 조회 결과 복원 | `User.reconstruct(id, email, ...)` |
-| `generate()` | ID 자동 생성 | `UserId.generate()` |
-| `from(value)` | 단일 값에서 생성 | `UserId.from("...")`, `PayrollPeriod.from(yearMonth)` |
-| `of(...)` | 복수 인자에서 생성 | `PayrollPeriod.of(year, month)` |
-| `standard()` | 기본값 생성 | `WorkTime.standard()`, `PolicyMultiplier.standard()` |
-| `fromBase(value)` | 특정 필드만으로 생성 | `PayrollAmount.fromBase(baseAmount)` |
-| `indefinite(startDate)` | 무기한 생성 | `PolicyEffectivePeriod.indefinite(startDate)` |
-| `start(context, ...)` | 프로세스 시작 | `PayrollBatchHistory.start(context, period, ...)` |
-| `checkIn(context, ...)` | 도메인 행위 기반 생성 | `AttendanceRecord.checkIn(context, ...)` |
-| `system(serviceName)` | 시스템 내부용 생성 | `DomainContextBase.system("batch")` |
-
-### 에러 메시지 컨벤션
-- 한국어 사용
-- 구체적인 값 포함: `"잔여 연차가 부족합니다. 현재: $value, 요청: $days"`
-- `require()` 함수 사용 (Kotlin 표준)
-
----
-
-## 메서드 네이밍 (도메인 행위)
-
-| 패턴 | 용도 | 예시 도메인 |
-|------|------|-------------|
-| `create` | 신규 생성 (Companion) | 모든 Aggregate |
-| `reconstruct` | 재구성 (Companion) | 모든 Aggregate |
-| `login` | 로그인 처리 | User |
-| `deactivate` / `activate` | 비활성화/활성화 | User, Employee |
-| `changePassword` | 비밀번호 변경 | User |
-| `deductLeave` / `restoreLeave` | 연차 차감/복구 | Employee |
-| `assignStore` | 매장 배정 | Employee |
-| `changeType` | 유형 변경 | Employee |
-| `checkIn` / `checkOut` | 출퇴근 체크 | AttendanceRecord |
-| `evaluateStatus` | 상태 평가 | AttendanceRecord |
-| `markAsAbsent` | 결근 처리 | AttendanceRecord |
-| `updateNote` | 메모 수정 | AttendanceRecord |
-| `confirm` / `unconfirm` | 확정/확정취소 | WorkSchedule |
-| `changeWorkTime` / `changeWorkDate` | 시간/날짜 변경 | WorkSchedule |
-| `approve` / `reject` / `cancel` | 승인/거부/취소 | LeaveRequest |
-| `markAsPaid` | 지급 완료 | Payroll |
-| `addOvertime` / `addDeduction` | 초과근무수당/공제 추가 | Payroll |
-| `recalculate` | 재계산 | Payroll, PayrollDetail |
-| `terminate` | 종료 | PayrollPolicy |
-| `updateMultiplier` | 배율 변경 | PayrollPolicy |
-| `complete` / `fail` | 완료/실패 처리 | PayrollBatchHistory |
-| `calculateWorkHours` | 근무 시간 계산 | WorkSchedule, AttendanceTime |
-| `calculateLeaveDays` | 휴가 일수 계산 | LeaveRequest |
-| `calculateTotal` | 총액 계산 | PayrollAmount |
-| `isEffectiveOn` / `isCurrentlyEffective` | 유효 기간 확인 | PayrollPolicy, PolicyEffectivePeriod |
-| `overlapsWith` | 기간 겹침 확인 | LeaveRequest, LeavePeriod |
-| `contains` | 포함 여부 확인 | LeavePeriod, WorkTime |
-| `deduct` / `add` | 값 차감/추가 | RemainingLeave |
-
----
-
-## Enum 값 네이밍
-
-- UPPER_SNAKE_CASE 사용
-- `description` 필드로 한국어 설명 포함
-
-| Enum | 값 패턴 |
-|------|---------|
-| Role | `SUPER_ADMIN`, `MANAGER`, `EMPLOYEE` |
-| EmployeeType | `REGULAR`, `IRREGULAR`, `PART_TIME` |
-| AttendanceStatus | `NORMAL`, `LATE`, `EARLY_LEAVE`, `ABSENT`, `PENDING` |
-| LeaveType | `ANNUAL`, `SICK`, `PERSONAL`, `MATERNITY`, `PATERNITY`, `BEREAVEMENT`, `UNPAID` |
-| LeaveStatus | `PENDING`, `APPROVED`, `REJECTED`, `CANCELLED` |
-| PolicyType | `OVERTIME_WEEKDAY`, `OVERTIME_WEEKEND`, `OVERTIME_HOLIDAY`, `NIGHT_SHIFT`, `HOLIDAY_WORK`, `BONUS`, `ALLOWANCE` |
-| WorkType | `WEEKDAY`, `NIGHT`, `WEEKEND`, `HOLIDAY` |
-| BatchStatus | `RUNNING`, `COMPLETED`, `PARTIAL_SUCCESS`, `FAILED` |
-
----
+| 분류 | 패턴 | 예시 |
+|------|------|------|
+| Controller | `{도메인}Controller` | `AuthController`, `EmployeeController`, `StoreController`, `AttendanceController`, `WorkScheduleController`, `LeaveRequestController`, `PayrollController`, `PayrollPolicyController`, `HealthController` |
+| Request DTO | `{동사}{대상}Request` | `CreateEmployeeRequest`, `LoginRequest`, `CheckInRequest` |
+| Response DTO | `{대상}Response` | `EmployeeResponse`, `LoginResponse`, `AttendanceRecordResponse` |
 
 ## API 경로
 
-| 규칙 | 설명 | 예시 |
+### 기본 규칙
+- 모든 API 경로는 `/api` 프리픽스로 시작
+- 리소스명은 소문자 복수형 (kebab-case)
+- 행위가 포함된 경로는 동사를 하위 경로로 사용
+
+### 경로 패턴
+
+| 패턴 | 의미 | 예시 |
 |------|------|------|
-| 기본 경로 | `/api/{resource}` | `/api/employees`, `/api/stores` |
-| 케이스 | kebab-case | `/api/work-schedules`, `/api/leave-requests` |
-| 복수형 | 리소스명은 복수 명사 | `/api/employees` (O), `/api/employee` (X) |
-| 중첩 리소스 | `/api/{parent}/{parentId}/{child}` | `/api/stores/{storeId}/employees` |
-| 행위 | 동사 대신 리소스 + HTTP Method | `POST /api/attendance-records` (출근 체크) |
-| 인증 | `/api/auth/{action}` | `/api/auth/login`, `/api/auth/refresh` |
+| `GET /api/{resources}` | 목록 조회 | `GET /api/employees` |
+| `GET /api/{resources}/{id}` | 단건 조회 | `GET /api/employees/{id}` |
+| `POST /api/{resources}` | 생성 | `POST /api/employees` |
+| `PUT /api/{resources}/{id}` | 수정 | `PUT /api/employees/{id}` |
+| `DELETE /api/{resources}/{id}` | 삭제/비활성화 | `DELETE /api/employees/{id}` |
+| `PUT /api/{resources}/{id}/{action}` | 상태 변경 | `PUT /api/leave-requests/{id}/approve` |
+| `POST /api/{resources}/{action}` | 특수 행위 | `POST /api/attendance/check-in` |
 
----
+### 리소스별 경로
 
-## 에러 코드 네이밍
+| 리소스 | Base Path | 비고 |
+|--------|-----------|------|
+| 인증 | `/api/auth` | login, register, refresh |
+| 매장 | `/api/stores` | CRUD |
+| 근로자 | `/api/employees` | CRUD + 비활성화 |
+| 근무일정 | `/api/schedules` | CRUD |
+| 출퇴근 | `/api/attendance` | check-in, check-out, adjust |
+| 휴가 | `/api/leave-requests` | CRUD + approve, reject, cancel |
+| 급여 | `/api/payrolls` | 조회 + calculate, batch |
+| 급여정책 | `/api/payroll-policies` | CRUD |
+| 헬스체크 | `/api/health` | 서버 상태 확인 |
 
-- 접두사: 도메인 약어 (AUTH, REG, STORE, EMP, ATT, SCH, LEAVE, PAYROLL, PAYROLL_POLICY, TOKEN)
-- 번호: 3자리 순번
-- `ErrorCode` object에서 `const val`로 중앙 관리
+### 쿼리 파라미터 네이밍
 
-```
-패턴: {DOMAIN_PREFIX}{NNN}
-예시: AUTH001, EMP003, LEAVE007, PAYROLL_POLICY002
-```
+| 용도 | 파라미터 | 예시 |
+|------|---------|------|
+| 매장 필터 | `storeId` | `GET /api/employees?storeId={id}` |
+| 근로자 필터 | `employeeId` | `GET /api/schedules?employeeId={id}` |
+| 날짜 필터 | `date`, `startDate`, `endDate` | `GET /api/schedules?startDate=2026-03-01&endDate=2026-03-31` |
+| 기간 필터 | `period` | `GET /api/payrolls?period=2026-03` |
+| 상태 필터 | `status` | `GET /api/leave-requests?status=PENDING` |
+| 페이징 | `page`, `size` | `GET /api/employees?page=0&size=20` |
+| 정렬 | `sort` | `GET /api/employees?sort=createdAt,desc` |
+
+### JSON 필드 네이밍
+- camelCase 사용 (Jackson 기본 설정)
+- 날짜/시간: ISO 8601 형식 (`2026-03-09T09:00:00Z`)
+- 금액: 문자열이 아닌 숫자 타입 (`"amount": 1500000.00`)
+- Boolean: `is` 프리픽스 (`"isActive": true`, `"isPaid": false`)
+- Enum: UPPER_SNAKE_CASE 문자열 (`"status": "PENDING"`, `"role": "SUPER_ADMIN"`)
+
+### HTTP 헤더
+- 인증: `Authorization: Bearer {accessToken}`
+- Content-Type: `Content-Type: application/json`
+- Accept: `Accept: application/json`

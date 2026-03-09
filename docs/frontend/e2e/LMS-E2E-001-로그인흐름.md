@@ -1,92 +1,79 @@
-# LMS-E2E-001: 로그인 흐름 E2E 테스트
+# LMS-E2E-001: 로그인흐름
 
 ## 기본 정보
 - type: e2e_test_spec
-- 화면: LoginScreen (`/login`)
-- 관련 위젯: `login_screen.dart`
-- 대상 사용자: EMPLOYEE, MANAGER, SUPER_ADMIN
+- tool: agent-browser
+- 관련 화면: LMS-SCREEN-001
 
 ## 관련 Backend Spec
-- LMS-USER-001 (로그인 Use Case)
-- LMS-USER-003 (토큰 갱신 Use Case)
-- LMS-API-USER-001 (인증 API - POST /api/auth/login)
-- POLICY-AUTH-001 (인증/인가 정책)
+- LMS-API-USER-001 (로그인 API)
+- LMS-USER-001 (사용자 인증 Use Case)
+
+## 테스트 데이터 준비 방법
+- init-data.md 기본 데이터 활용
+- 테스트 전용 시딩 API: POST /api/v1/test/seed
+- 사용 계정: manager.gangnam@lms.com (MANAGER), employee1.gangnam@lms.com (EMPLOYEE), admin@lms.com (SUPER_ADMIN)
+- 비밀번호: password123
 
 ## 테스트 시나리오
 
-### TC-FE-001-01: 정상 로그인 — 데이터 있음 (E2E)
+### TC-FE-001-01: MANAGER 계정 정상 로그인 (E2E)
 - Given:
-  - Backend 데이터: init-data.md 기본 데이터 (employee1.gangnam@lms.com / password123, 역할: EMPLOYEE)
-  - `/login` 페이지 열림
+  - Backend 데이터: init-data.md 기본 사용자 6명 등록 상태
+  - 로그인 페이지(/login) 접속 상태
 - When:
-  - 이메일 입력란(`labelText: '이메일'`)에 "employee1.gangnam@lms.com" 입력
-  - 비밀번호 입력란(`labelText: '비밀번호'`)에 "password123" 입력
-  - "로그인" 버튼 클릭
-- Then:
-  - `/home` 페이지로 이동 표시
-  - 사용자 정보 카드에 "employee1.gangnam@lms.com" 텍스트 표시
-  - 역할 "EMPLOYEE" 텍스트 표시
-  - "출퇴근 체크", "근무 일정", "휴가 신청", "급여 조회" 메뉴 카드 4건 표시
-
-### TC-FE-001-02: 빈 입력 상태에서 로그인 시도 — 빈 데이터 (E2E)
-- Given:
-  - Backend 데이터: init-data.md 기본 데이터 (서버 가동 상태)
-  - `/login` 페이지 열림
-- When:
-  - 이메일, 비밀번호 입력란을 비운 채로 "로그인" 버튼 클릭
-- Then:
-  - "이메일을 입력해주세요" 유효성 검증 메시지 표시
-  - "비밀번호를 입력해주세요" 유효성 검증 메시지 표시
-  - 페이지 이동 없이 `/login` 유지 표시
-
-### TC-FE-001-03: 잘못된 비밀번호 입력 — 입력/행위 테스트 (E2E)
-- Given:
-  - Backend 데이터: init-data.md 기본 데이터 (employee1.gangnam@lms.com 계정 존재)
-  - `/login` 페이지 열림
-- When:
-  - 이메일 입력란에 "employee1.gangnam@lms.com" 입력
-  - 비밀번호 입력란에 "wrongpassword" 입력
-  - "로그인" 버튼 클릭
-- Then:
-  - SnackBar에 에러 메시지 표시 (AUTH001: "이메일 또는 비밀번호가 일치하지 않습니다.")
-  - `/login` 페이지 유지 표시
-
-### TC-FE-001-04: 역할별 로그인 — 관리자 로그인 링크 (E2E)
-- Given:
-  - Backend 데이터: init-data.md 기본 데이터 (admin@lms.com / password123, 역할: SUPER_ADMIN)
-  - `/login` 페이지 열림
-- When:
-  - "관리자로 로그인" 텍스트 버튼 클릭
-- Then:
-  - `/admin/login` 페이지로 이동 표시
-  - 관리자 로그인 폼 표시
-
-### TC-FE-001-05: 비활성 계정 로그인 — 에러 상태 검증 (E2E)
-- Given:
-  - Backend 데이터: init-data.md 기본 데이터에서 특정 사용자 비활성 상태 (isActive=false)
-  - `/login` 페이지 열림
-- When:
-  - 이메일 입력란에 비활성 계정 이메일 입력
+  - 이메일 입력란에 "manager.gangnam@lms.com" 입력
   - 비밀번호 입력란에 "password123" 입력
   - "로그인" 버튼 클릭
 - Then:
-  - SnackBar에 "비활성화된 사용자입니다." 에러 메시지 표시 (AUTH002)
-  - `/login` 페이지 유지 표시
+  - /dashboard 페이지로 이동
+  - 대시보드 페이지 텍스트 표시 확인
+  - 사이드바에 "박수진" 이름 텍스트 표시
 
-## agent-browser 실행 예시
+### TC-FE-001-02: 빈 입력값으로 로그인 시도 (E2E)
+- Given:
+  - Backend 데이터: init-data.md 기본 사용자 등록 상태
+  - 로그인 페이지(/login) 접속 상태
+- When:
+  - 이메일/비밀번호 입력 없이 "로그인" 버튼 클릭
+- Then:
+  - "이메일을 입력해주세요." 메시지 표시
+  - "비밀번호를 입력해주세요." 메시지 표시
+  - /login 페이지에 그대로 유지 (이동 미발생)
 
-```python
-# TC-FE-001-01: 정상 로그인
-await page.goto("/login")
-await page.fill('input[type="email"]', 'employee1.gangnam@lms.com')
-await page.fill('input[type="password"]', 'password123')
-await page.click('text=로그인')
-await expect(page).to_have_url("/home")
-await expect(page.locator('text=employee1.gangnam@lms.com')).to_be_visible()
+### TC-FE-001-03: 잘못된 비밀번호로 로그인 시도 (E2E)
+- Given:
+  - Backend 데이터: init-data.md 기본 사용자 등록 상태
+  - 로그인 페이지(/login) 접속 상태
+- When:
+  - 이메일 입력란에 "manager.gangnam@lms.com" 입력
+  - 비밀번호 입력란에 "wrongpassword" 입력
+  - "로그인" 버튼 클릭
+- Then:
+  - "이메일 또는 비밀번호가 올바르지 않습니다." 에러 메시지 표시
+  - /login 페이지에 그대로 유지 (이동 미발생)
+  - 비밀번호 입력란 초기화
 
-# TC-FE-001-02: 빈 입력 유효성 검증
-await page.goto("/login")
-await page.click('text=로그인')
-await expect(page.locator('text=이메일을 입력해주세요')).to_be_visible()
-await expect(page.locator('text=비밀번호를 입력해주세요')).to_be_visible()
-```
+### TC-FE-001-04: 비활성화된 계정으로 로그인 시도 (E2E)
+- Given:
+  - Backend 데이터: is_active=false 상태의 사용자 계정 (시딩 API로 생성)
+  - 로그인 페이지(/login) 접속 상태
+- When:
+  - 이메일 입력란에 비활성화 계정 이메일 입력
+  - 비밀번호 입력란에 "password123" 입력
+  - "로그인" 버튼 클릭
+- Then:
+  - "비활성화된 계정입니다. 관리자에게 문의하세요." 에러 메시지 표시
+  - /login 페이지에 그대로 유지 (이동 미발생)
+
+### TC-FE-001-05: 서버 오류(500) 시 로그인 동작 (E2E)
+- Given:
+  - Backend API 응답: 500 (서버 내부 오류)
+- When:
+  - 이메일 입력란에 "manager.gangnam@lms.com" 입력
+  - 비밀번호 입력란에 "password123" 입력
+  - "로그인" 버튼 클릭
+- Then:
+  - "서버 오류가 발생했습니다. 다시 시도해주세요." 에러 메시지 표시
+  - 재시도 버튼 표시
+  - /login 페이지에 그대로 유지 (이동 미발생)

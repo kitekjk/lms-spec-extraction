@@ -2,71 +2,82 @@
 
 ## 기본 정보
 - type: screen_spec
-- 화면명: 출퇴근 체크 / 출퇴근 기록
-- 라우트: `/attendance`, `/attendance/records`
-- 대상 사용자: 직원(EMPLOYEE)
+- route: /attendance
 
 ## 관련 Backend Spec
-- LMS-API-ATT-001 (출퇴근API)
+- LMS-API-ATT-001 (출퇴근 기록 조회/처리 API)
+- LMS-ATT-001 (출근 Use Case), LMS-ATT-002 (퇴근 Use Case), LMS-ATT-003 (출퇴근 조정 Use Case), LMS-ATT-004 (출퇴근 조회 Use Case)
+- LMS-API-SCH-001 (근무 일정 조회 API)
 
 ## 화면 목적
-직원이 출근/퇴근을 체크하고, 오늘의 출퇴근 상태를 확인하며, 과거 출퇴근 기록을 기간별로 조회한다.
+EMPLOYEE는 출근/퇴근 버튼으로 본인의 출퇴근을 처리하고, MANAGER/ADMIN은 소속 매장 근로자의 출퇴근 기록을 조회하고 조정한다.
+
+## 접근 권한
+- SUPER_ADMIN: 전체 매장 출퇴근 기록 조회 및 조정
+- MANAGER: 소속 매장 출퇴근 기록 조회 및 조정
+- EMPLOYEE: 본인 출퇴근 처리 및 기록 조회
 
 ## 화면 구성 요소
 
-### 현재 시간 표시
-- 표시 데이터: 현재 날짜(yyyy년 MM월 dd일 EEEE 형식), 실시간 시계(HH:mm:ss, 1초마다 갱신)
-- Backend API: GET /api/attendance/my-records
-  - 참조 Spec: LMS-API-ATT-001
-  - 요청 파라미터: `?startDate={오늘}&endDate={오늘}`
-  - 응답 매핑: records[0] → todayRecord (오늘의 출퇴근 기록)
-- 빈 상태: "출퇴근 기록이 없습니다"
-- 에러 상태: "데이터를 불러올 수 없습니다"
-
-### 오늘의 출퇴근 기록 카드
-- 표시 데이터: 출근 시간(HH:mm:ss, 초록색), 퇴근 시간(HH:mm:ss, 빨간색), 근무 시간(X.X시간)
-- Backend API: GET /api/attendance/my-records
-  - 참조 Spec: LMS-API-ATT-001
-  - 요청 파라미터: `?startDate={오늘}&endDate={오늘}`
-  - 응답 매핑: checkInTime → 출근 시간, checkOutTime → 퇴근 시간, actualWorkHours → 근무 시간
-- 빈 상태: "오늘 출퇴근 기록이 없습니다"
-- 에러 상태: 카드가 표시되지 않음
-
-### 출근 체크 버튼
-- 표시 데이터: "출근 체크" 버튼(초록색, 큰 사이즈), Work Schedule ID 입력 필드
+### 출퇴근 버튼 영역 (EMPLOYEE 전용)
+- 표시 데이터: 출근 버튼 또는 퇴근 버튼 (현재 상태에 따라 토글), 현재 시각(HH:mm:ss 실시간), 금일 근무 일정 시간 (예: "09:00 ~ 18:00")
 - Backend API: POST /api/attendance/check-in
   - 참조 Spec: LMS-API-ATT-001
-  - 요청 파라미터: `{ "workScheduleId": "string" }`
-  - 응답 매핑: 성공 시 todayRecord 업데이트, SnackBar "출근이 완료되었습니다"
-- 빈 상태: "출근 체크 대기 중"
-- 에러 상태: SnackBar 빨간색 배경으로 에러 메시지 표시
-- 조건: 오늘 출근 기록이 없을 때만 표시
-
-### 퇴근 체크 버튼
-- 표시 데이터: "퇴근 체크" 버튼(빨간색, 큰 사이즈)
+  - 요청 파라미터: { employeeId: string }
+  - 응답 매핑: attendanceRecord.checkInTime -> "출근 완료: {HH:mm}" 텍스트 표시
 - Backend API: POST /api/attendance/check-out
   - 참조 Spec: LMS-API-ATT-001
-  - 요청 파라미터: 없음
-  - 응답 매핑: 성공 시 todayRecord 업데이트, SnackBar "퇴근이 완료되었습니다"
-- 빈 상태: "퇴근 체크 대기 중"
-- 에러 상태: SnackBar 빨간색 배경으로 에러 메시지 표시
-- 조건: 오늘 출근 기록이 있고 퇴근 기록이 없을 때만 표시
+  - 요청 파라미터: { attendanceRecordId: string }
+  - 응답 매핑: attendanceRecord.checkOutTime -> "퇴근 완료: {HH:mm}" 텍스트 표시, status -> 상태 배지 (NORMAL: 정상, LATE: 지각, EARLY_LEAVE: 조퇴)
+- 권한: EMPLOYEE만 표시 — MANAGER, SUPER_ADMIN에게는 미표시
+- 빈 상태: 금일 출근 기록이 없으면 "출근" 버튼 활성화 상태
+- 에러 상태: "출퇴근 처리에 실패했습니다. 다시 시도해주세요."
 
-### 출퇴근 기록 목록 (records 화면)
-- 표시 데이터: 날짜 필터(시작일~종료일 선택), 기록 리스트(날짜, 출근시간, 퇴근시간, 근무시간, 상태 Chip)
-- Backend API: GET /api/attendance/my-records
+### 출퇴근 기록 목록
+- 표시 데이터: 테이블 형태 - 날짜(YYYY-MM-DD), 직원명, 출근 시간(HH:mm), 퇴근 시간(HH:mm), 상태 배지(NORMAL: 초록, LATE: 주황, EARLY_LEAVE: 노랑, ABSENT: 빨강, PENDING: 회색), 메모
+- Backend API: GET /api/attendance?storeId={storeId}&startDate={startDate}&endDate={endDate}
   - 참조 Spec: LMS-API-ATT-001
-  - 요청 파라미터: `?startDate={시작일}&endDate={종료일}`
-  - 응답 매핑: records[] → ListView, 각 record의 attendanceDate/checkInTime/checkOutTime/actualWorkHours/status → UI 매핑
-- 빈 상태: "출퇴근 기록이 없습니다"
-- 에러 상태: "데이터를 불러올 수 없습니다"
-- 상태 Chip 색상: PRESENT(초록), LATE(주황), ABSENT(빨강), ON_LEAVE(파랑)
+  - 요청 파라미터: storeId (MANAGER의 소속 매장), startDate, endDate (기본값: 이번 주 월요일 ~ 오늘)
+  - 응답 매핑: records[].attendanceDate -> 날짜, records[].employeeName -> 직원명, records[].attendanceTime.checkInTime -> 출근 시간, records[].attendanceTime.checkOutTime -> 퇴근 시간, records[].status -> 상태 배지, records[].note -> 메모
+- EMPLOYEE 역할: 본인 기록만 표시 (GET /api/attendance?employeeId={myId}&startDate=...&endDate=...)
+- 빈 상태: "해당 기간의 출퇴근 기록이 없습니다"
+- 에러 상태: "출퇴근 기록을 불러올 수 없습니다. 다시 시도해주세요."
+
+### 날짜 필터
+- 표시 데이터: 시작일/종료일 날짜 선택기 (DatePicker), 조회 버튼
+- Backend API: GET /api/attendance?startDate={startDate}&endDate={endDate}
+  - 참조 Spec: LMS-API-ATT-001
+  - 요청 파라미터: startDate, endDate (YYYY-MM-DD)
+  - 응답 매핑: 출퇴근 기록 목록 갱신
+- 빈 상태: 기본값 - 이번 주 월요일 ~ 오늘
+- 에러 상태: 날짜 형식 오류 시 "올바른 날짜를 선택해주세요." 표시
+
+### 출퇴근 조정 모달 (MANAGER/ADMIN 전용)
+- 표시 데이터: 선택한 기록의 출근 시간, 퇴근 시간 수정 필드, 조정 사유 입력 필드
+- Backend API: PUT /api/attendance/{id}/adjust
+  - 참조 Spec: LMS-API-ATT-001
+  - 요청 파라미터: { checkInTime: string, checkOutTime: string, note: string }
+  - 응답 매핑: 수정 완료 시 "출퇴근 기록이 조정되었습니다." 메시지 표시, 목록 갱신
+- 권한: MANAGER, SUPER_ADMIN만 사용 가능 — EMPLOYEE에게는 미표시
+- 빈 상태: 해당 없음
+- 에러 상태: "출퇴근 조정에 실패했습니다. 다시 시도해주세요."
 
 ## 사용자 흐름
+1. EMPLOYEE: /attendance 접속 시 상단에 출퇴근 버튼 영역, 하단에 본인 기록 목록 표시
+2. EMPLOYEE: "출근" 버튼 클릭 -> 출근 처리 -> 버튼이 "퇴근"으로 변경, "출근 완료: 09:00" 텍스트 표시
+3. EMPLOYEE: "퇴근" 버튼 클릭 -> 퇴근 처리 -> 상태 배지 표시 (정상/지각/조퇴), 버튼 비활성화
+4. MANAGER: /attendance 접속 시 소속 매장 전체 근로자의 출퇴근 기록 목록 표시
+5. MANAGER: 특정 기록 행 클릭 -> 출퇴근 조정 모달 열림 -> 시간 수정 후 "저장" 클릭
+6. 날짜 필터로 조회 기간을 변경할 수 있다
 
-1. 출퇴근 체크 화면에서 현재 날짜와 실시간 시계를 확인한다
-2. 출근 전이면 Work Schedule ID를 입력하고 "출근 체크" 버튼을 누른다
-3. 출근 후 퇴근 전이면 "퇴근 체크" 버튼을 누른다
-4. 출퇴근 완료 시 "오늘의 출퇴근이 완료되었습니다" 메시지가 표시된다
-5. AppBar의 기록 아이콘(Icons.history)을 눌러 출퇴근 기록 화면으로 이동한다
-6. 기록 화면에서 날짜 범위를 선택하여 과거 기록을 조회한다
+## 검증 조건
+- 출근 버튼: 이미 출근한 경우 비활성화
+- 퇴근 버튼: 출근하지 않은 경우 비활성화
+- 출퇴근 조정: 조정 사유(note)는 필수 입력 (빈 값 불가)
+- 날짜 필터: 시작일이 종료일보다 이후일 수 없음
+
+## 비기능 요구사항
+- 초기 로딩: 2초 이내
+- 인터랙션 반응: 100ms 이내
+- API 실패 시: 에러 메시지 표시 + 재시도 버튼
+- 출퇴근 버튼 클릭 후 중복 요청 방지 (버튼 즉시 비활성화)

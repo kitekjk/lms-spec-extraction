@@ -1,106 +1,66 @@
-# LMS-PAY-002: 급여정책수정
+# LMS-PAY-002 급여정책수정
 
 ## 기본 정보
 - type: use_case
+- id: LMS-PAY-002
 - domain: payroll
-
-## 관련 Spec
-- LMS-API-PAY-001 (급여API)
-- LMS-PAY-001 (급여정책등록)
-- LMS-PAY-007 (급여정책조회)
-
-## 개요
-SUPER_ADMIN이 현재 유효한 급여 정책의 배율, 종료일, 설명을 수정한다.
-
-## 관련 모델
-- 주 모델: PayrollPolicy (Aggregate Root)
-- 참조 모델: PolicyMultiplier, PolicyEffectivePeriod, PayrollPolicyId
-
-## 선행 조건
-- 요청자가 SUPER_ADMIN 권한을 보유해야 한다
-- 인증된 사용자여야 한다
-- 수정 대상 정책이 존재해야 한다
-- 수정 대상 정책이 현재 유효한 상태여야 한다
-
-## 기본 흐름
-1. 관리자가 정책 ID와 수정 내용을 지정하여 정책 수정을 요청한다 (배율(선택), 종료일(선택), 설명(선택))
-2. 시스템은 해당 ID의 정책이 존재하는지 확인한다
-3. 시스템은 해당 정책이 현재 유효한 상태인지 확인한다
-4. 시스템은 요청된 항목에 대해 수정을 수행한다
-   - 배율(multiplier)이 제공된 경우: 배율을 변경한다
-   - 종료일(effectiveTo)이 제공된 경우: 정책을 종료 처리한다 (종료일은 시작일 이후여야 한다)
-   - 설명(description)이 제공된 경우: 설명을 변경한다
-5. 시스템은 수정된 정책을 저장하고 결과를 반환한다
-
-## 대안 흐름
-- 배율만 변경 요청한 경우: 배율만 수정하고 나머지는 유지한다
-- 종료일만 설정 요청한 경우: 종료일만 설정하고 나머지는 유지한다
-- 설명만 변경 요청한 경우: 설명만 수정하고 나머지는 유지한다
-
-## 예외 흐름
-- 정책을 찾을 수 없는 경우: PayrollPolicyNotFoundException (PAYROLL_POLICY001) 발생
-- 정책이 현재 유효하지 않은 경우: InactivePolicyCannotBeModifiedException (PAYROLL_POLICY004) 발생
-- 종료일이 시작일보다 이전인 경우: 유효성 검증 실패
-
-## 검증 조건
-- 정책 ID는 유효한 UUID 문자열이어야 한다
-- 배율이 제공된 경우 0 이상 10.0 이하의 BigDecimal 값이어야 한다
-- 종료일이 제공된 경우 정책의 시작일 이후여야 한다
-- 정책이 현재 유효한 상태여야 수정 가능하다
+- last-updated: 2026-03-09
 
 ## 관련 정책
-- POLICY-PAYROLL-001 참조 (배율 범위, 유효 기간 규칙)
-- POLICY-NFR-001 참조
+- POLICY-PAYROLL-001: 급여 정책 관리 (§7)
+- POLICY-NFR-001: 변경 이력 추적, API 하위호환성
+
+## 관련 Spec
+- LMS-PAY-001-급여정책등록 (선행)
+- LMS-API-PAY-001-급여API (PUT /api/payroll-policies/{policyId})
+
+## 관련 모델
+- **주 모델**: `PayrollPolicy` (Aggregate Root)
+- 참조 모델: `PolicyMultiplier` (Value Object), `PolicyEffectivePeriod` (Value Object)
+
+## 개요
+SUPER_ADMIN이 기존 급여 정책의 배율(multiplier), 종료일(effectiveTo), 설명(description)을 수정한다. 유효하지 않은(종료된) 정책은 수정할 수 없다.
+
+## 기본 흐름
+1. SUPER_ADMIN이 대상 정책 ID(policyId)와 수정할 필드(multiplier, effectiveTo, description 중 하나 이상)를 입력한다.
+2. 시스템이 해당 PayrollPolicy를 조회한다. 존재하지 않으면 에러코드 PAYROLL_POLICY001을 반환한다 (HTTP 404).
+3. 시스템이 해당 정책이 현재 유효한지 검증한다. 종료되었거나 유효하지 않으면 에러코드 PAYROLL_POLICY004를 반환한다 (HTTP 409).
+4. multiplier가 입력된 경우, 시스템이 0.0 이상 10.0 이하인지 검증한다. 범위 초과 시 HTTP 400을 반환한다.
+5. 시스템이 PayrollPolicy를 수정하고 저장한다.
+6. 시스템이 수정된 PayrollPolicy 정보를 반환한다 (HTTP 200).
+
+## 대안 흐름
+- **AF-1**: 모든 수정 필드(multiplier, effectiveTo, description)가 null인 경우 → 기존 정책을 그대로 반환한다 (HTTP 200).
+- **AF-2**: MANAGER 또는 EMPLOYEE가 정책 수정을 시도하는 경우 → HTTP 403을 반환한다.
+- **AF-3**: 인증 토큰이 없거나 만료된 경우 → HTTP 401을 반환한다.
+
+## 검증 조건
+- policyId에 해당하는 PayrollPolicy가 DB에 존재해야 한다. 위반 시 PAYROLL_POLICY001 / HTTP 404
+- 대상 정책이 현재 유효해야 한다 (isCurrentlyEffective == true). 종료된 정책은 수정 불가. 위반 시 PAYROLL_POLICY004 / HTTP 409
+- multiplier가 입력된 경우 0.0 이상 10.0 이하여야 한다 (0.0 <= multiplier <= 10.0). 위반 시 HTTP 400
+- 수정 요청자의 역할은 SUPER_ADMIN이어야 한다. 위반 시 HTTP 403
 
 ## 비기능 요구사항
-- POLICY-NFR-001 참조
+- **POLICY-NFR-001 §2.2**: 배율은 BigDecimal을 사용한다.
+- **POLICY-NFR-001 §3**: 정책 수정 시 AuditLog에 기록한다 (EntityType: PAYROLL_POLICY, ActionType: UPDATE, oldValue/newValue 포함).
+- **POLICY-NFR-001 §5.1**: API 응답 시간 500ms 이내.
 
 ## 테스트 시나리오
 
-### TC-PAY-002-01: 정상 배율 수정 (Integration)
+### TC-PAY-002-01: SUPER_ADMIN의 유효 정책 배율 수정 성공
+- **레벨**: Integration
+- **Given**: 현재 유효한 NIGHT_SHIFT 정책(multiplier=1.5)이 존재한다.
+- **When**: SUPER_ADMIN이 multiplier=2.0으로 수정한다.
+- **Then**: 정책의 multiplier가 2.0으로 변경되고 HTTP 200이 반환된다.
 
-- Given: SUPER_ADMIN 권한 사용자가 로그인하고, 현재 유효한 OVERTIME_WEEKDAY 정책(배율 1.5)이 존재
-- When: 해당 정책의 배율을 2.0으로 수정 요청
-- Then: 배율이 2.0으로 변경되고 수정된 정책 정보가 반환됨
+### TC-PAY-002-02: 종료된 정책 수정 시도 실패
+- **레벨**: Unit
+- **Given**: effectiveTo=2025-12-31인 종료된 정책이 존재한다.
+- **When**: SUPER_ADMIN이 해당 정책의 multiplier를 수정한다.
+- **Then**: 에러코드 PAYROLL_POLICY004가 반환되고 HTTP 409가 반환된다.
 
-### TC-PAY-002-02: 종료일 설정으로 정책 종료 처리 (Integration)
-
-- Given: SUPER_ADMIN 권한 사용자가 로그인하고, 시작일 2026-01-01인 무기한 정책이 존재
-- When: 종료일을 2026-06-30으로 설정하여 수정 요청
-- Then: 정책의 종료일이 2026-06-30으로 설정됨
-
-### TC-PAY-002-03: 설명만 변경 (Integration)
-
-- Given: SUPER_ADMIN 권한 사용자가 로그인하고, 현재 유효한 정책이 존재
-- When: 설명만 "수정된 설명"으로 변경 요청
-- Then: 설명이 변경되고 배율과 종료일은 기존 값 유지
-
-### TC-PAY-002-04: 존재하지 않는 정책 수정 시도 (Integration)
-
-- Given: SUPER_ADMIN 권한 사용자가 로그인한 상태
-- When: 존재하지 않는 정책 ID로 수정 요청
-- Then: PayrollPolicyNotFoundException (PAYROLL_POLICY001) 발생 - "급여 정책을 찾을 수 없습니다: {policyId}"
-
-### TC-PAY-002-05: 유효하지 않은 정책 수정 시도 (Integration)
-
-- Given: SUPER_ADMIN 권한 사용자가 로그인하고, 이미 종료된(유효 기간 만료) 정책이 존재
-- When: 해당 정책의 배율 수정 요청
-- Then: InactivePolicyCannotBeModifiedException (PAYROLL_POLICY004) 발생 - "유효하지 않은 정책은 수정할 수 없습니다."
-
-### TC-PAY-002-06: 배율 경계값 상한 초과 수정 시도 (Unit)
-
-- Given: 유효한 정책이 존재
-- When: 배율을 10.1로 수정 시도
-- Then: 검증 오류 발생 - "정책 배율은 10.0 이하여야 합니다. 입력값: 10.1"
-
-### TC-PAY-002-07: 종료일이 시작일보다 이전인 경우 (Integration)
-
-- Given: 시작일이 2026-04-01인 유효한 정책이 존재
-- When: 종료일을 2026-03-01로 설정하여 수정 요청
-- Then: 유효성 검증 실패
-
-### TC-PAY-002-08: 권한 없는 사용자의 정책 수정 거부 (E2E)
-
-- Given: EMPLOYEE 권한 사용자가 로그인한 상태
-- When: 급여 정책 수정 API 호출
-- Then: 403 Forbidden 응답 반환
+### TC-PAY-002-03: 존재하지 않는 정책 수정 시도
+- **레벨**: Unit
+- **Given**: 존재하지 않는 policyId.
+- **When**: SUPER_ADMIN이 해당 policyId로 수정을 요청한다.
+- **Then**: 에러코드 PAYROLL_POLICY001이 반환되고 HTTP 404가 반환된다.

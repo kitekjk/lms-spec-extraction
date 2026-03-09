@@ -2,268 +2,325 @@
 
 ## 기본 정보
 - type: architecture_rules
-- pattern: DDD (Domain-Driven Design) + Clean Architecture
-- build: Gradle Kotlin DSL + Version Catalog
-- rootProject: lms-demo
-- group: com.example.lms
-
----
-
-## 모듈 구조
-
-```
-lms-demo/
-├── domain/              # 순수 비즈니스 로직 (외부 의존 없음)
-│   └── src/main/kotlin/com/lms/domain/
-│       ├── common/      # 공용 인터페이스 (DomainContext)
-│       ├── model/       # Aggregate별 서브패키지
-│       │   ├── user/
-│       │   ├── employee/
-│       │   ├── store/
-│       │   ├── attendance/
-│       │   ├── schedule/
-│       │   ├── leave/
-│       │   ├── payroll/
-│       │   ├── auditlog/
-│       │   └── auth/
-│       ├── service/     # 도메인 서비스 (복수 Aggregate 로직)
-│       └── exception/   # 도메인 예외
-│
-├── application/         # UseCase 및 오케스트레이션
-│   └── src/main/kotlin/com/lms/application/
-│       └── {context}/   # 도메인 컨텍스트별 AppService
-│
-├── infrastructure/      # 기술 구현체
-│   └── src/main/kotlin/com/lms/infrastructure/
-│       ├── persistence/ # JPA Repository 구현체
-│       ├── security/    # JWT, 인증 필터
-│       └── config/      # 기술 설정 (DB, Cache 등)
-│
-└── interfaces/          # 외부 인터페이스 (REST API)
-    └── src/main/kotlin/com/lms/interfaces/
-        ├── web/
-        │   ├── controller/  # REST Controller
-        │   └── dto/         # Request/Response DTO
-        └── LmsApplication.kt  # Spring Boot Entry Point
-```
-
----
-
-## 의존성 방향
-
-### 의존 방향 (실제 build.gradle.kts 기반)
-
-```
-interfaces → application, infrastructure, domain
-infrastructure → domain
-application → domain
-domain → (없음, 순수 Kotlin)
-```
-
-| 모듈 | 의존하는 프로젝트 모듈 | 허용되는 외부 의존 |
-|------|------------------------|--------------------|
-| domain | 없음 | Kotlin stdlib, Kotlin reflect만 |
-| application | `:domain` | Spring Context, Spring TX, Spring Security Crypto, Spring Validation |
-| infrastructure | `:domain` | Spring Data JPA, Spring Web, Spring Security, JWT(jjwt), MySQL, Springdoc OpenAPI |
-| interfaces | `:domain`, `:application`, `:infrastructure` | Spring Web, Spring Security, Spring Validation, JWT, Jackson, Springdoc OpenAPI, H2(test) |
-
-### 금지 규칙
-- domain -> Spring, JPA, 외부 프레임워크 의존 금지
-- application -> infrastructure 의존 금지
-- application -> application (AppService 간 상호 참조) 금지
-- interfaces -> 비즈니스 로직 작성 금지
-
----
+- service: lms-backend
+- architecture: DDD + Clean Architecture
+- build: Gradle 멀티모듈 (Kotlin DSL)
 
 ## 레이어 정의와 책임
 
-### domain
+### 모듈 구조
 
-**목적:** 순수 비즈니스 로직과 도메인 모델
+```
+lms-demo/
+├── domain/           # 순수 비즈니스 로직
+├── application/      # 유스케이스 오케스트레이션
+├── infrastructure/   # 기술 구현체
+└── interfaces/       # 외부 인터페이스 (REST API, 진입점)
+```
 
-**규칙:**
-- 순수 Kotlin 코드만 사용 (Spring, JPA 등 외부 라이브러리 금지)
-- Aggregate Root 내에 비즈니스 로직 캡슐화
-- 여러 Aggregate에 걸친 로직은 도메인 서비스(`domain/service/`)에 위치
-- Repository는 인터페이스만 정의 (구현은 infrastructure에서)
-- 모든 비즈니스 메서드의 첫 번째 인자는 `DomainContext`
-- Aggregate Root와 Entity는 `data class`로 선언, `private constructor` + `create()`/`reconstruct()` 팩토리 메서드 패턴
+### domain 모듈
+
+**책임:** Aggregate Root, Entity, Value Object, Domain Service, Repository Interface, Domain Event, Domain Exception 정의
+
+**허용:**
+- 순수 Kotlin 코드 (kotlin-stdlib, kotlin-reflect만 의존)
+- data class를 사용한 불변 Aggregate Root
+- private constructor + companion object의 `create()` / `reconstruct()` 팩토리 패턴
+- DomainContext를 통한 요청 컨텍스트 전달
+- `@JvmInline value class`를 사용한 식별자/값 래핑
+
+**금지:**
+- Spring Framework 의존 (`@Service`, `@Component`, `@Transactional` 등)
+- JPA 어노테이션 (`@Entity`, `@Table`, `@Column` 등)
+- 외부 라이브러리 의존 (Jackson, JJWT 등)
+- infrastructure/interfaces 모듈 참조
+
+**패키지 구조:**
+```
+com.lms.domain/
+├── common/           # DomainContext 등 공통 객체
+├── exception/        # 도메인 예외 (DomainException 상속)
+├── model/
+│   ├── user/         # User AR + UserId, Email, Password, Role
+│   ├── employee/     # Employee AR + EmployeeId, EmployeeName, EmployeeType, RemainingLeave
+│   ├── store/        # Store AR + StoreId, StoreName, StoreLocation
+│   ├── attendance/   # AttendanceRecord AR + AttendanceRecordId, AttendanceTime, AttendanceStatus
+│   ├── schedule/     # WorkSchedule AR + WorkScheduleId, WorkDate, WorkTime
+│   ├── leave/        # LeaveRequest AR + LeaveRequestId, LeaveType, LeaveStatus, LeavePeriod
+│   ├── payroll/      # Payroll AR, PayrollPolicy AR + 관련 VO/Enum
+│   ├── auditlog/     # AuditLog AR + AuditLogId, EntityType, ActionType
+│   └── auth/         # TokenProvider 인터페이스
+└── service/          # Domain Service (LeavePolicyService, PayrollCalculationEngine)
+```
+
+### application 모듈
+
+**책임:** 유스케이스 실행, 트랜잭션 경계 관리, 도메인 객체 오케스트레이션
+
+**허용:**
+- domain 모듈 의존
+- Spring Context (`@Service`, `@Transactional`)
+- Spring Validation (`spring-boot-starter-validation`)
+- Spring Security Crypto (`spring-security-crypto`) - 비밀번호 인코딩
+- Command/Result DTO 정의
+
+**금지:**
+- infrastructure/interfaces 모듈 참조
+- JPA 어노테이션 직접 사용
+- HTTP 요청/응답 객체 참조
+- 외부 API 클라이언트 직접 호출
+
+**패턴:** 하나의 AppService 클래스는 하나의 public `execute()` 메서드만 보유 (단일 유스케이스 원칙)
+
+```kotlin
+@Service
+@Transactional
+class CreateEmployeeAppService(
+    private val employeeRepository: EmployeeRepository,
+    private val userRepository: UserRepository
+) {
+    fun execute(command: CreateEmployeeCommand): CreateEmployeeResult {
+        // 1. Repository에서 조회
+        // 2. Domain 로직 실행
+        // 3. Repository에 저장
+        // 4. Result 반환
+    }
+}
+```
+
+**패키지 구조:**
+```
+com.lms.application/
+├── auth/       # LoginAppService, RegisterAppService, RefreshTokenAppService
+├── employee/   # CreateEmployeeAppService, GetEmployeeAppService, ...
+├── store/      # CreateStoreAppService, GetStoreAppService, ...
+├── attendance/ # CheckInAppService, CheckOutAppService, ...
+├── schedule/   # CreateWorkScheduleAppService, ...
+├── leave/      # CreateLeaveRequestAppService, ApproveLeaveRequestAppService, ...
+└── payroll/    # CalculatePayrollAppService, ExecutePayrollBatchAppService, ...
+```
+
+### infrastructure 모듈
+
+**책임:** domain에서 정의한 인터페이스의 기술 구현, JPA Entity/Repository, Security 설정, JWT 토큰 처리, 외부 시스템 연동
+
+**허용:**
+- domain 모듈 의존
+- Spring Boot Starter (Web, Data JPA, Security)
+- JPA 어노테이션, Hibernate
+- JJWT 라이브러리
+- MySQL Connector
+- Springdoc OpenAPI
+- 테스트: Spring Boot Test, MockK, Kotest Extensions
+
+**금지:**
+- application 모듈 참조
+- interfaces 모듈 참조
+- 비즈니스 로직 포함 (데이터 변환/매핑만 허용)
+
+**패키지 구조:**
+```
+com.lms.infrastructure/
+├── persistence/    # JPA Entity, Spring Data Repository, Repository 구현체
+├── security/       # JWT 토큰 제공자, Security Filter, SecurityUtils
+└── config/         # 기술 설정 (DB, Jackson, CORS 등)
+```
+
+**JPA Entity 매핑 규칙:**
+- JPA Entity 클래스명: `Jpa{AggregateRoot}` (예: `JpaUser`, `JpaEmployee`)
+- Repository 구현체: `{AggregateRoot}RepositoryImpl` (domain의 Repository 인터페이스 구현)
+- Spring Data 인터페이스: `SpringData{AggregateRoot}Repository`
+- Domain 모델 <-> JPA Entity 변환은 Repository 구현체 내부에서 수행
+
+### interfaces 모듈
+
+**책임:** REST 컨트롤러, Request/Response DTO, Spring Boot 진입점
+
+**허용:**
+- domain, application, infrastructure 모듈 의존
+- Spring Web (`@RestController`, `@RequestMapping`)
+- Spring Security (`@PreAuthorize`)
+- Spring Validation (`@Valid`, `@NotBlank`)
+- Jackson (JSON 직렬화/역직렬화)
+- Springdoc OpenAPI
+- Request DTO -> Command 변환
+- Result -> Response DTO 변환
+
+**금지:**
+- 비즈니스 로직 포함
+- Repository 직접 호출
+- Domain 모델을 HTTP 응답으로 직접 반환
+
+**패키지 구조:**
+```
+com.lms.interfaces/
+├── web/
+│   ├── controller/   # REST Controller
+│   └── dto/          # Request/Response DTO
+└── LmsApplication.kt  # @SpringBootApplication 진입점
+```
+
+**Controller 패턴:**
+```kotlin
+@RestController
+@RequestMapping("/api/employees")
+class EmployeeController(
+    private val createEmployeeAppService: CreateEmployeeAppService,
+    private val getEmployeeAppService: GetEmployeeAppService
+) {
+    @PostMapping
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MANAGER')")
+    fun create(@Valid @RequestBody request: CreateEmployeeRequest): ResponseEntity<EmployeeResponse> {
+        val command = request.toCommand()
+        val result = createEmployeeAppService.execute(command)
+        return ResponseEntity.status(HttpStatus.CREATED).body(EmployeeResponse.from(result))
+    }
+}
+```
+
+## 의존성 방향
+
+### 모듈 간 의존 규칙 (바깥에서 안으로만 의존)
+
+```
+interfaces → application → domain ← infrastructure
+                             ↑
+                    infrastructure (구현 제공)
+```
+
+| 모듈 | 의존 가능 | 의존 불가 |
+|------|----------|----------|
+| domain | 없음 (순수 Kotlin) | application, infrastructure, interfaces |
+| application | domain | infrastructure, interfaces |
+| infrastructure | domain | application, interfaces |
+| interfaces | domain, application, infrastructure | - |
+
+### Gradle 의존성
+
+```kotlin
+// domain/build.gradle.kts
+dependencies {
+    // 순수 Kotlin만 (kotlin-stdlib, kotlin-reflect는 root에서 상속)
+}
+
+// application/build.gradle.kts
+dependencies {
+    implementation(project(":domain"))
+    implementation("org.springframework:spring-context")
+    implementation("org.springframework:spring-tx")
+}
+
+// infrastructure/build.gradle.kts
+dependencies {
+    implementation(project(":domain"))
+    implementation(libs.spring.boot.starter.data.jpa)
+    implementation(libs.spring.boot.starter.security)
+    // ...
+}
+
+// interfaces/build.gradle.kts
+dependencies {
+    implementation(project(":domain"))
+    implementation(project(":application"))
+    implementation(project(":infrastructure"))
+    implementation(libs.spring.boot.starter.web)
+    // ...
+}
+```
+
+### 의존성 역전 패턴
+
+domain에서 인터페이스를 정의하고, infrastructure에서 구현한다:
+
+```
+domain:  interface UserRepository { fun findByEmail(email: Email): User? }
+           ↑ (의존)
+infrastructure:  class UserRepositoryImpl(
+                     private val springDataRepo: SpringDataUserRepository
+                 ) : UserRepository { ... }
+```
+
+## 도메인 모델 설계 규칙
+
+### Aggregate Root 생성 패턴
+- `private constructor` + `companion object` 팩토리
+- `create()`: 새 인스턴스 생성 (비즈니스 검증 포함)
+- `reconstruct()`: 기존 데이터 복원 (Repository에서 사용, 검증 최소화)
+- 모든 명령 메서드는 `DomainContext`를 첫 번째 파라미터로 수신
 - 상태 변경은 `copy()`를 통한 불변 객체 반환
-- 예외는 `DomainException`을 상속한 구체 클래스 사용 (DomainException 직접 사용 금지)
 
-**Gradle 플러그인:** `kotlin.jvm`만 적용
+### Value Object 규칙
+- `data class` 또는 `@JvmInline value class` 사용
+- `init {}` 블록에서 유효성 검증 수행
+- 불변 (모든 필드 `val`)
+- ID 타입: `@JvmInline value class {Name}Id(val value: String)`에 `generate()` companion 메서드
 
-**의존성:** Kotlin stdlib, Kotlin reflect (root subprojects에서 상속)
+### Enum 규칙
+- 한국어 `description` 프로퍼티 필수
+- 도메인 행위가 있는 경우 메서드 추가 (예: `LeaveType.requiresApproval`)
 
----
+### Repository Interface 규칙
+- domain 모듈에 인터페이스 정의
+- Aggregate Root 단위로 1개의 Repository
+- 반환 타입은 domain 모델 (JPA Entity 노출 금지)
 
-### application
+## 테스트 전략
 
-**목적:** UseCase 단위 오케스트레이션, 트랜잭션 경계
+### 테스트 프레임워크
+- JUnit 5 Platform
+- Kotest (StringSpec, BehaviorSpec)
+- MockK (모킹)
+- Kotest Extensions Spring (통합 테스트)
+- H2 Database (인터페이스 모듈 테스트)
+- Testcontainers (인프라 통합 테스트, MySQL)
 
-**규칙:**
-- UseCase 단위로 AppService 클래스 정의
-- 클래스 이름에 `AppService` postfix 사용
-- 클래스에 `@Service`, `@Transactional` 선언 (메서드가 아닌 클래스 레벨)
-- 하나의 public 메서드만 제공 (단일 책임 원칙)
-- AppService 간 상호 참조 금지
-- 비즈니스 로직은 도메인에 위임, 오케스트레이션 역할만 수행
-- 인터페이스 없이 class로 직접 선언
-- domain 모듈만 의존 (infrastructure 직접 의존 금지)
+### 테스트 레벨
 
-**Gradle 플러그인:** `kotlin.jvm`, `kotlin.spring`, `spring.dependency.management`
+| 레벨 | 대상 모듈 | Spring 컨텍스트 | DB |
+|------|----------|----------------|-----|
+| Unit | domain | 불필요 | 불필요 |
+| Unit | application | MockK로 Repository Mock | 불필요 |
+| Integration | infrastructure | `@DataJpaTest` | H2 또는 Testcontainers |
+| Integration | interfaces | `@SpringBootTest` | H2 |
+| E2E | 전체 | `@SpringBootTest(webEnvironment = RANDOM_PORT)` | Testcontainers MySQL |
 
-**의존성:** `:domain`, Spring Context, Spring TX, Spring Security Crypto, Spring Validation
+### 테스트 명명
+- Kotest StringSpec: 한글 테스트 이름 사용
+- `@Tag("TC-{도메인}-{번호}")` 형식으로 TC-ID 마킹
 
----
+## 코드 품질 규칙
 
-### infrastructure
-
-**목적:** 기술 구현체 (DB, 외부 API, 보안 등)
-
-**규칙:**
-- domain에 정의된 Repository 인터페이스 구현
-- JPA Entity는 infrastructure 전용 (domain 모델과 분리)
-- Enum 타입은 `@Enumerated` 금지, `AttributeConverter` 사용 (`@Converter(autoApply = true)`)
-- 생성일시/수정일시는 JPA Auditing(`@CreatedDate`, `@LastModifiedDate`) 사용
-- BaseEntity를 상속하여 공통 타임스탬프 관리
-- `TokenProvider` 인터페이스의 JWT 구현체 위치
-- Spring Security 설정 및 필터 위치
-
-**Gradle 플러그인:** `kotlin.jvm`, `kotlin.spring`, `kotlin.jpa`, `spring.dependency.management`
-
-**의존성:** `:domain`, Spring Data JPA, Spring Web, Spring Security, JWT(jjwt), MySQL, Springdoc OpenAPI
-
----
-
-### interfaces
-
-**목적:** 외부 요청 수신 및 응답 (REST API)
-
-**규칙:**
-- REST Controller는 AppService만 호출
-- DTO <-> Command 변환만 수행
-- 비즈니스 로직 작성 금지
-- Spring Boot Application Entry Point 위치
-- `spring-boot` 플러그인이 적용되는 유일한 모듈
-
-**Gradle 플러그인:** `kotlin.jvm`, `kotlin.spring`, `spring.boot`, `spring.dependency.management`
-
-**의존성:** `:domain`, `:application`, `:infrastructure`, Spring Web, Spring Security, Spring Validation, JWT, Jackson, Springdoc OpenAPI, H2(test)
-
----
-
-## DDD 패턴
-
-### Aggregate Root
-- 일관성 경계(Consistency Boundary)의 진입점
-- `data class` + `private constructor`
-- `create()`: 새로운 인스턴스 생성 (DomainContext 필수)
-- `reconstruct()`: Repository 조회 시 재구성
-- 상태 변경 메서드: `copy()`로 불변 반환
-- 현재 프로젝트의 Aggregate Root: User, Employee, Store, AttendanceRecord, WorkSchedule, LeaveRequest, Payroll, PayrollPolicy, PayrollBatchHistory, AuditLog
-
-### Entity
-- 식별자가 있고 변경 가능한 객체
-- Aggregate Root에 종속
-- 현재 프로젝트의 Entity: PayrollDetail (PayrollId로 Payroll에 종속)
-
-### Value Object
-- 불변, 식별자 없음, 값 기반 동등성
-- `@JvmInline value class` 또는 `data class`로 구현
-- `init` 블록에서 유효성 검증
-- 팩토리 메서드 제공: `generate()`, `from()`, `of()`, `standard()` 등
-- 현재 프로젝트의 주요 VO: UserId, Email, Password, EmployeeId, EmployeeName, RemainingLeave, StoreId, StoreName, StoreLocation, AttendanceRecordId, AttendanceTime, WorkScheduleId, WorkDate, WorkTime, LeaveRequestId, LeavePeriod, PayrollId, PayrollAmount, PayrollPeriod, PayrollDetailId, PayrollPolicyId, PolicyMultiplier, PolicyEffectivePeriod, PayrollBatchHistoryId, AuditLogId
-
-### Sealed Class
-- enum 대신 sealed class 사용이 권장됨
-- 현재 프로젝트에서 sealed class로 구현: ActionType, EntityType
-
-### Repository
-- 도메인 계층에 인터페이스 정의
-- infrastructure 계층에서 구현
-- 컬렉션과 유사한 추상화 제공
-
-### Domain Service
-- 복수 Aggregate 간 도메인 규칙
-- Stateless
-- `domain/service/`에 위치
-- Spring 의존성 없음 (순수 Kotlin)
-- 현재: LeavePolicyService, PayrollCalculationEngine
-
-### Application Service (AppService)
-- UseCase 1개당 AppService 1개
-- 트랜잭션 경계 관리 (클래스 레벨 @Transactional)
-- 도메인 객체와 Repository 호출만 수행
-
----
-
-## 데이터 흐름
-
-```
-HTTP Request
-    |
-[REST Controller] (interfaces)
-    | DTO -> Command 변환
-[Application Service] (application) @Transactional
-    | 오케스트레이션
-[Domain Service] (domain) <- 비즈니스 로직
-    | 상태 변경
-[Aggregate Root] (domain) <- 상태 + 규칙
-    | 영속화
-[Repository Interface] (domain) -> [Repository Impl] (infrastructure) <- JPA
-    |
-Database
-```
-
----
-
-## 빌드 설정
-
-### Version Catalog (`gradle/libs.versions.toml`)
-- Kotlin 2.1.0
-- Spring Boot 3.5.9
-- Spring Dependency Management 1.1.7
-- MySQL Connector 8.3.0
-- H2 2.2.224
-- Hibernate 6.4.1.Final
-- JJWT 0.12.5
-- Jakarta Validation 3.0.2
-- Kotest 5.8.0
-- MockK 1.13.9
-- Spotless 7.0.2
-- ktlint 1.5.0
-- Springdoc OpenAPI 2.7.0
-
-### 코드 품질
-- Spotless + ktlint 적용 (모든 서브프로젝트)
+### Spotless + ktlint
 - max_line_length: 120
-- 비활성화된 ktlint 규칙: no-wildcard-imports, trailing-comma-on-call-site, trailing-comma-on-declaration-site, filename
+- wildcard imports 허용 (`ktlint_standard_no-wildcard-imports: disabled`)
+- trailing comma 비활성화
+- filename 규칙 비활성화
+
+### 빌드 설정
 - JVM Target: 17
-- `-Xjsr305=strict` 컴파일러 옵션
+- `-Xjsr305=strict`: JSR-305 null-safety 어노테이션 strict 모드
 
-### 테스트
-- JUnit Platform 사용
-- Kotest (Runner, Assertions, Property)
-- MockK
-- Spring MockK (integration test)
-- Given-When-Then 패턴
-- `shouldBe`, `shouldNotBe`, `shouldThrow` 매처 사용
+## 횡단 관심사
 
----
+### 인증/인가
+- Spring Security 6.x + JWT
+- `@PreAuthorize` 어노테이션으로 Controller 메서드 단위 역할 제어
+- `SecurityUtils` 유틸리티로 프로그래밍 방식 권한 검증 (`isSuperAdmin()`, `isManager()`, `belongsToStore()`, `isCurrentUser()`)
+- MANAGER는 소속 매장 데이터만 접근 (`SecurityUtils.belongsToStore(storeId)`)
+- EMPLOYEE는 본인 데이터만 접근 (`SecurityUtils.isCurrentUser(employeeId)`)
 
-## 설정 파일 구조
+### 감사 로그
+- AuditLog Aggregate로 데이터 변경 이력 기록
+- DomainContext에서 수행자 정보 및 클라이언트 IP 추출
+- 변경 전/후 값을 JSON 형식으로 저장
 
-### application.yml 프로파일
-- **dev**: 로컬 DB, `ddl-auto: update`, DEBUG 로깅, `show-sql: true`
-- **prod**: 환경변수 기반, `ddl-auto: validate`, WARN 로깅, `show-sql: false`
+### 에러 처리
+- `DomainException` 기반 도메인 예외 계층
+- 도메인별 전용 Exception 클래스 (AttendanceException, LeaveException 등)
+- `ErrorCode` Enum으로 에러 코드 체계 관리
+- `@RestControllerAdvice`에서 예외 -> HTTP 응답 변환
 
-### 환경 변수
-- `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`
-- `JWT_SECRET_KEY`
-- `SPRING_PROFILES_ACTIVE`
-
-### JwtProperties
-- `jwt.secretKey`: 비밀키
-- `jwt.accessTokenExpiration`: Access Token 만료 시간 (기본 3600000ms = 1시간)
-- `jwt.refreshTokenExpiration`: Refresh Token 만료 시간 (기본 604800000ms = 7일)
+### 트랜잭션
+- Application Service에서 `@Transactional`로 트랜잭션 경계 설정
+- 읽기 전용 조회: `@Transactional(readOnly = true)`
+- Domain 모듈에는 트랜잭션 어노테이션 금지
