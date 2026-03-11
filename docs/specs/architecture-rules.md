@@ -247,6 +247,10 @@ infrastructure:  class UserRepositoryImpl(
 - `create()`: 새 인스턴스 생성 (비즈니스 검증 포함)
 - `reconstruct()`: 기존 데이터 복원 (Repository에서 사용, 검증 최소화)
 - 모든 명령 메서드는 `DomainContext`를 첫 번째 파라미터로 수신
+- 명령 메서드란 Aggregate Root의 상태를 변경하는 메서드를 의미하며, 다음이 해당한다:
+  - `create()` (companion object 팩토리): DomainContext를 파라미터로 받지 **않음** (생성 시점에는 아직 컨텍스트 불필요)
+  - `update()`, `approve()`, `reject()`, `cancel()`, `deactivate()`, `checkOut()`, `adjust()`: DomainContext를 **첫 번째 파라미터**로 수신
+  - 조회/계산 전용 메서드(예: `isWeekend()`, `overlapsWith()`, `totalAmount()`): DomainContext **불필요**
 - 상태 변경은 `copy()`를 통한 불변 객체 반환
 
 ### Value Object 규칙

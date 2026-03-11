@@ -48,10 +48,10 @@
 
 | payroll_policy_id | policy_type | multiplier | effective_from | effective_to | description |
 |-------------------|-------------|------------|----------------|--------------|-------------|
-| policy-001 | OVERTIME | 1.5 | 2024-01-01 | NULL (무기한) | 초과근무 가산율 |
+| policy-001 | OVERTIME_WEEKDAY | 1.5 | 2024-01-01 | NULL (무기한) | 평일 초과근무 가산율 |
 | policy-002 | NIGHT_SHIFT | 1.5 | 2024-01-01 | NULL (무기한) | 야간근무 가산율 |
-| policy-003 | WEEKEND | 1.5 | 2024-01-01 | NULL (무기한) | 주말근무 가산율 |
-| policy-004 | HOLIDAY | 2.0 | 2024-01-01 | NULL (무기한) | 공휴일근무 가산율 |
+| policy-003 | OVERTIME_WEEKEND | 1.5 | 2024-01-01 | NULL (무기한) | 주말 초과근무 가산율 |
+| policy-004 | OVERTIME_HOLIDAY | 2.0 | 2024-01-01 | NULL (무기한) | 공휴일 초과근무 가산율 |
 
 ## 데이터 로드 규칙
 

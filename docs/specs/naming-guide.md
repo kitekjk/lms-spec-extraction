@@ -92,9 +92,37 @@ com.lms.interfaces      # interfaces 모듈
 | 분류 | 패턴 | 예시 |
 |------|------|------|
 | 역할 | `Role` | SUPER_ADMIN, MANAGER, EMPLOYEE |
-| 유형 | `{도메인}Type` | `EmployeeType`, `LeaveType`, `PolicyType`, `WorkType` |
+| 유형 | `{도메인}Type` | `EmployeeType`, `LeaveType`, `PolicyType`, `WorkType` (아래 Enum 값 상세 참조) |
 | 상태 | `{도메인}Status` | `AttendanceStatus`, `LeaveStatus` |
 | 감사 | `ActionType`, `EntityType` | CREATE, UPDATE, DELETE / USER, EMPLOYEE, STORE |
+
+### Enum 값 상세
+
+아래 Enum 값은 정확히 명시된 값만 사용해야 한다. 약어/별칭 사용 불가.
+
+**PolicyType** (급여 정책 유형):
+
+| 값 | 설명 |
+|----|------|
+| `OVERTIME_WEEKDAY` | 평일 초과근무 |
+| `OVERTIME_WEEKEND` | 주말 초과근무 |
+| `OVERTIME_HOLIDAY` | 공휴일 초과근무 |
+| `NIGHT_SHIFT` | 야간 근무 |
+| `HOLIDAY_WORK` | 휴일 근무 |
+| `BONUS` | 보너스 |
+| `ALLOWANCE` | 수당 |
+
+> 주의: `OVERTIME`, `WEEKEND`, `HOLIDAY` 등 약어는 유효하지 않다. 반드시 위 전체 이름을 사용할 것.
+
+**AttendanceStatus** (출퇴근 상태):
+
+| 값 | 설명 |
+|----|------|
+| `NORMAL` | 정상 출퇴근 |
+| `LATE` | 지각 |
+| `EARLY_LEAVE` | 조퇴 |
+| `ABSENT` | 결근 |
+| `PENDING` | 퇴근 대기 중 |
 
 ### Domain Exception
 

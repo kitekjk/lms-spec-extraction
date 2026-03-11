@@ -28,8 +28,13 @@
 4. 시스템이 해당 근로자의 당일(Asia/Seoul 기준) 출근 기록을 조회한다.
 5. 출근 기록이 존재하고 퇴근이 처리되지 않은 상태(PENDING)인지 확인한다.
 6. 서버 시간(Asia/Seoul)을 퇴근 시각(checkOutTime)으로 설정한다.
-7. AttendanceRecord의 checkOut 메서드를 호출하여 퇴근을 처리한다.
-8. workScheduleId가 연결되어 있으면, 해당 WorkSchedule의 시작/종료 시간과 실제 출퇴근 시간을 비교하여 상태를 평가한다.
+7. AttendanceRecord의 `checkOut(context, checkOutTime, status)` 메서드를 호출하여 퇴근을 처리한다.
+   - `checkOut` 메서드 시그니처: `fun checkOut(context: DomainContext, checkOutTime: Instant, status: AttendanceStatus): AttendanceRecord`
+   - 상태(status) 판정은 **Application Service(CheckOutAppService)에서** 수행하며, 판정된 결과를 `checkOut` 메서드 파라미터로 전달한다.
+   - `checkOut` 메서드는 checkOutTime 설정 + status 변경만 담당한다 (판정 로직 미포함).
+8. 상태 판정 로직 (CheckOutAppService 내부):
+   - workScheduleId가 null이면: 기본 상태 NORMAL
+   - workScheduleId가 있으면: WorkSchedule을 조회하여 시작/종료 시간과 실제 출퇴근 시간을 비교
 9. 업데이트된 AttendanceRecord를 저장하고 200 OK 응답을 반환한다.
 
 ## 대안 흐름

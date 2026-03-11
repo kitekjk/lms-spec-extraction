@@ -43,8 +43,9 @@
 
 ### 6. 근무 시간 계산
 1. 근무 시간 = 퇴근 시각 - 출근 시각 (시간 단위, 소수점 2자리).
-2. 퇴근 기록이 없는 경우(PENDING 상태) 근무 시간을 계산하지 않는다.
-3. 계산된 근무 시간은 급여 산정에 사용된다 (POLICY-PAYROLL-001 참조).
+2. 계산 방법: `Duration.between(checkInTime, checkOutTime).toMinutes() / 60.0` 을 `BigDecimal`로 변환 후 `setScale(2, RoundingMode.HALF_UP)` 반올림한다.
+3. 퇴근 기록이 없는 경우(PENDING 상태) 근무 시간을 계산하지 않는다 (actualWorkHours = null).
+4. 계산된 근무 시간은 급여 산정에 사용된다 (POLICY-PAYROLL-001 참조).
 
 ### 7. 에러 코드
 | 에러코드 | 설명 |
